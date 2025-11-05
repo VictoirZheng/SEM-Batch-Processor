@@ -1,0 +1,20 @@
+﻿# ============================================
+# Confirmatory Factor Analysis (CFA) Template
+# ============================================
+# Description: Used to validate preset factor structure
+# Usage: Replace F1_item1, F1_item2, etc. with actual variable names
+
+# Define measurement model
+# Factor 1 (latent variable)
+{{Factor1}} =~ {{F1_item1}} + {{F1_item2}} + {{F1_item3}} + {{F1_item4}}
+
+# Factor 2 (latent variable)
+{{Factor2}} =~ {{F2_item1}} + {{F2_item2}} + {{F2_item3}} + {{F2_item4}}
+
+# Factor 3 (latent variable)
+{{Factor3}} =~ {{F3_item1}} + {{F3_item2}} + {{F3_item3}}
+
+# Factor covariances (optional)
+{{Factor1}} ~~ {{Factor2}}
+{{Factor1}} ~~ {{Factor3}}
+{{Factor2}} ~~ {{Factor3}}

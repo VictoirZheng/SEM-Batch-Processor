@@ -1,0 +1,35 @@
+# R files
+.Rhistory
+.RData
+.Rproj.user
+*.Rproj
+
+# R output files
+-v.out
+*.Rout
+
+# Test data
+test_*.csv
+test_*.xlsx
+
+# Temporary files
+*.tmp
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/*.log
+*.log
+
+# Output files
+output/*.out
+output/*.dat
+mplus_output/*.out
+mplus_output/*.inp
+mplus_output/*.dat
+
+# Mplus files
+Mplus*.log

@@ -1,0 +1,15 @@
+﻿# ============================================
+# Moderation Effect Model Template
+# ============================================
+# Description: Used to test the effect of a moderator on the relationship between predictor and outcome
+# Usage: Replace variable names with actual variables in your data
+
+# Main effects
+{{Outcome}} ~ {{Predictor}} + {{Moderator}}
+
+# Interaction effect (moderation effect)
+# Note: Variables should be centered before analysis
+{{Outcome}} ~ {{Predictor}}:{{Moderator}}
+
+# Or use complete form
+# {{Outcome}} ~ {{Predictor}} + {{Moderator}} + {{Predictor}}:{{Moderator}}

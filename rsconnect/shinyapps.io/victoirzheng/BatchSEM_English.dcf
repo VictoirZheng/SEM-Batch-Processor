@@ -1,0 +1,12 @@
+name: BatchSEM_English
+title: BatchSEM_English
+username: victoirzheng
+account: victoirzheng
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 15973998
+bundleId: 11135097
+url: https://victoirzheng.shinyapps.io/BatchSEM_English/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

@@ -1,0 +1,23 @@
+﻿# ============================================
+# Full Structural Equation Model (SEM) Template
+# ============================================
+# Description: Complete SEM including measurement model and structural model
+# Usage: Replace variable names with actual variables in your data
+
+# Measurement Model
+# Exogenous latent variable
+{{Exogenous_Factor}} =~ {{EF_item1}} + {{EF_item2}} + {{EF_item3}} + {{EF_item4}}
+
+# Endogenous latent variable 1
+{{Endogenous_Factor1}} =~ {{EN1_item1}} + {{EN1_item2}} + {{EN1_item3}}
+
+# Endogenous latent variable 2
+{{Endogenous_Factor2}} =~ {{EN2_item1}} + {{EN2_item2}} + {{EN2_item3}}
+
+# Structural Model
+# Regression relationships among latent variables
+{{Endogenous_Factor1}} ~ {{Exogenous_Factor}}
+{{Endogenous_Factor2}} ~ {{Exogenous_Factor}} + {{Endogenous_Factor1}}
+
+# Residual covariance (if theoretically supported)
+# {{Endogenous_Factor1}} ~~ {{Endogenous_Factor2}}

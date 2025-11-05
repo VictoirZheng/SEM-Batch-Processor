@@ -1,0 +1,35 @@
+﻿TITLE: Full Structural Equation Model (SEM) Template
+DATA: FILE = your_data.dat;
+
+VARIABLE: 
+  NAMES = {{EF_item1}} {{EF_item2}} {{EF_item3}} {{EF_item4}}
+          {{EN1_item1}} {{EN1_item2}} {{EN1_item3}}
+          {{EN2_item1}} {{EN2_item2}} {{EN2_item3}};
+  USEVARIABLES = ALL;
+  MISSING = ALL(-999);
+
+ANALYSIS:
+  ESTIMATOR = MLR;
+  
+MODEL:
+  ! Measurement Model
+  ! Exogenous latent variable
+  {{Exogenous_Factor}} BY {{EF_item1}}* {{EF_item2}} {{EF_item3}} {{EF_item4}};
+  {{Exogenous_Factor}}@1;
+  
+  ! Endogenous latent variable 1
+  {{Endogenous_Factor1}} BY {{EN1_item1}}* {{EN1_item2}} {{EN1_item3}};
+  {{Endogenous_Factor1}}@1;
+  
+  ! Endogenous latent variable 2
+  {{Endogenous_Factor2}} BY {{EN2_item1}}* {{EN2_item2}} {{EN2_item3}};
+  {{Endogenous_Factor2}}@1;
+  
+  ! Structural Model
+  {{Endogenous_Factor1}} ON {{Exogenous_Factor}};
+  {{Endogenous_Factor2}} ON {{Exogenous_Factor}} {{Endogenous_Factor1}};
+
+OUTPUT:
+  STDYX;
+  MODINDICES(ALL);
+  CINTERVAL;
