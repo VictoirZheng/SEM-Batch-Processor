@@ -1,0 +1,28 @@
+! First-stage moderated mediation (Hayes model 7): W moderates X -> M.
+! imm = index of moderated mediation (Hayes, 2015).
+
+VARIABLE:
+  USEVARIABLES = {{X:predictor}} {{W:moderator}} {{M:mediator}} {{Y:outcome}} XW;
+
+DEFINE:
+  CENTER {{X}} {{W}} (GRANDMEAN);
+  XW = {{X}}*{{W}};
+
+ANALYSIS:
+  ESTIMATOR = ML;
+  BOOTSTRAP = 2000;
+
+MODEL:
+  {{M}} ON {{X}} (a1)
+           {{W}} (a2)
+           XW (a3);
+  {{Y}} ON {{M}} (b)
+           {{X}} (cp);
+
+MODEL CONSTRAINT:
+  NEW(imm indmean);
+  imm = a3*b;
+  indmean = a1*b;
+
+OUTPUT:
+  STANDARDIZED CINTERVAL(BOOTSTRAP);

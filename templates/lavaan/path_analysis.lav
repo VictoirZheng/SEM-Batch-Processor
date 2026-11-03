@@ -1,0 +1,3 @@
+# Path analysis with covariates: X -> Y controlling for a set of covariates
+
+{{Y:outcome}} ~ b*{{X:predictor}} + {{COV:set}}

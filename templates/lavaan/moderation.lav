@@ -1,0 +1,8 @@
+# Moderation (observed variables): does W moderate the effect of X on Y?
+# Tip: mean-centre X and W first (Data page -> Derived variables -> centre),
+# then assign the centred copies (c_...) here so that b1 and b2 are
+# interpretable as effects at the mean of the other variable.
+
+{{Y:outcome}} ~ b1*{{X:predictor}} + b2*{{W:moderator}} + b3*{{X}}:{{W}}
+
+# b3 is the interaction (moderation) effect

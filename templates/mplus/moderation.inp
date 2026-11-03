@@ -1,0 +1,20 @@
+! Moderation (observed variables): does W moderate the effect of X on Y?
+! X and W are grand-mean centred in DEFINE; XW is their product.
+
+VARIABLE:
+  USEVARIABLES = {{Y:outcome}} {{X:predictor}} {{W:moderator}} XW;
+
+DEFINE:
+  CENTER {{X}} {{W}} (GRANDMEAN);
+  XW = {{X}}*{{W}};
+
+ANALYSIS:
+  ESTIMATOR = MLR;
+
+MODEL:
+  {{Y}} ON {{X}} (b1)
+           {{W}} (b2)
+           XW (b3);
+
+OUTPUT:
+  STANDARDIZED CINTERVAL;

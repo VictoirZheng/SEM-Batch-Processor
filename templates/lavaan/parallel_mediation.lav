@@ -1,0 +1,11 @@
+# Parallel mediation: X -> M1 -> Y and X -> M2 -> Y
+
+{{M1:mediator}} ~ a1*{{X:predictor}}
+{{M2:mediator}} ~ a2*{{X}}
+{{Y:outcome}} ~ b1*{{M1}} + b2*{{M2}} + cp*{{X}}
+{{M1}} ~~ {{M2}}      # residual covariance of the mediators
+
+ind1      := a1*b1
+ind2      := a2*b2
+ind_total := a1*b1 + a2*b2
+ind_diff  := a1*b1 - a2*b2   # contrast of the two indirect effects

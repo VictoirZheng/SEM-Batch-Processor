@@ -1,0 +1,9 @@
+# Simple mediation: X -> M -> Y
+# Select one or more variables for each placeholder to run every combination.
+# Recommended: bootstrap (Run page) for the indirect effect.
+
+{{M:mediator}} ~ a*{{X:predictor}}
+{{Y:outcome}} ~ b*{{M}} + cp*{{X}}
+
+ind   := a*b          # indirect effect
+total := cp + a*b     # total effect

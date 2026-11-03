@@ -1,18 +1,18 @@
-# R files
+# R
 .Rhistory
 .RData
 .Rproj.user
 *.Rproj
-
-# R output files
--v.out
 *.Rout
 
-# Test data
+# Local configuration and run output
+config/local.yaml
+mplus_runs/
+logs/
+
+# Test / temporary data
 test_*.csv
 test_*.xlsx
-
-# Temporary files
 *.tmp
 *.bak
 
@@ -20,16 +20,5 @@ test_*.xlsx
 .DS_Store
 Thumbs.db
 
-# Logs
-logs/*.log
-*.log
-
-# Output files
-output/*.out
-output/*.dat
-mplus_output/*.out
-mplus_output/*.inp
-mplus_output/*.dat
-
-# Mplus files
+# Mplus
 Mplus*.log

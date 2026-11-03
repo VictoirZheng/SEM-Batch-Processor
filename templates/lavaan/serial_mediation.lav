@@ -1,0 +1,10 @@
+# Serial (chain) mediation: X -> M1 -> M2 -> Y
+
+{{M1:mediator}} ~ a1*{{X:predictor}}
+{{M2:mediator}} ~ a2*{{X}} + d21*{{M1}}
+{{Y:outcome}} ~ b1*{{M1}} + b2*{{M2}} + cp*{{X}}
+
+ind_m1    := a1*b1
+ind_m2    := a2*b2
+ind_chain := a1*d21*b2
+ind_total := a1*b1 + a2*b2 + a1*d21*b2
