@@ -50,3 +50,6 @@ pre.syntax { max-height: 60vh; overflow: auto; font-size: 12.5px; background: #f
 
 .engine-table th { width: 40%; font-weight: 600; }
 table.dataTable td { vertical-align: top; }
+.ph-set-hint { margin: -2px 0 6px 0; }
+.combo-pairs ul { margin-top: 2px; }
+.combo-pairs code { color: #8e44ad; background: transparent; padding: 0; }

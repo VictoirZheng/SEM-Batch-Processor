@@ -27,6 +27,17 @@ for the full list of problems found in 2.1.x and how each one was handled.
 - 10 consistent templates for both engines (simple/parallel/serial mediation, moderation, moderated mediation, APIM, APIMeM, CFA, latent mediation, regression with covariates).
 - Test suite (`Rscript tests/run_tests.R`).
 
+### Second review round (before merge)
+- Security: lavaan evaluates modifiers and `:=`/constraint expressions as R code; model syntax is now checked against a whitelist of lavaan modifiers and arithmetic functions before it reaches lavaan (prevents code execution on the online server).
+- `reproduce.R` uses the exact lavaan arguments of each model (a global `ordered =` silently switched continuous models to DWLS); verified to reproduce bootstrap results exactly.
+- Placeholder columns are named `{{name}}` (a placeholder `{{se}}` or `{{p}}` overwrote result columns); effect keys are template-specific when a batch mixes templates.
+- BCa falls back to bias-corrected intervals when there are fewer draws than cases (previously all parameters were lost); robust → scaled → standard fit-index fallback; only clearly inadmissible lavaan warnings change the status.
+- Mplus: Bayesian output (posterior SD, credibility intervals, one-tailed p not used for correction), multilevel/mixture group labels, R² rows, reserved words, FATAL ERROR, no line breaking inside labelled lines, text variables left out of the data file.
+- Selection order of variables is preserved (pairing of linked placeholders, marker item of item sets) and the pairs are shown; bare digit suffixes (M1/M2) are no longer linked automatically.
+- Specification curve with a panel of variable choices; ordinal-like variables and small N per parameter are flagged.
+- Encoding detection on large files, UTF-16, short CSV rows, NA inputs, worker start failures.
+- GitHub Actions workflow running the tests, including parsing of real Mplus outputs shipped with MplusAutomation.
+
 ### Removed
 - Non-functional controls (checkpoint interval, retry, pause, theme, tooltips, animations, log level, memory, cache) and unused dependencies (shinyWidgets, plotly, dplyr, tidyr, stringr, psych, progress, crayon, shinyjs).
 - Outdated documents (USER_GUIDE, INSTALLATION, PROJECT_SUMMARY, PROJECT_STRUCTURE, TRANSLATION_SUMMARY); their content is now in README.md and the in-app help.

@@ -19,7 +19,8 @@ focal_rows <- function(params, types = c("defined", "indirect"), labels = NULL) 
   if ("loading" %in% types) keep <- keep | op == "=~"
   if ("covariance" %in% types) keep <- keep | (op == "~~" & params$lhs != params$rhs)
   labels <- labels[nzchar(labels %||% character(0))]
-  if (length(labels) > 0) keep <- keep & params$label %in% labels
+  # case-insensitive: Mplus reports labels and NEW parameters in upper case
+  if (length(labels) > 0) keep <- keep & toupper(params$label) %in% toupper(labels)
   keep & !is.na(params$est) & !is.na(params$se) & params$se > 0
 }
 
@@ -81,9 +82,9 @@ build_fit_table <- function(results, manifest) {
     )
   })
   out <- do.call(rbind, rows)
-  extra <- manifest[, setdiff(names(manifest), c("id", "syntax", "engine")), drop = FALSE]
-  cbind(out[, "id", drop = FALSE], extra[match(out$id, manifest$id), setdiff(names(extra), "id"), drop = FALSE],
-        out[, -1, drop = FALSE])
+  extra <- manifest[match(out$id, manifest$id), intersect(c("name", manifest_ph_cols(manifest)), names(manifest)), drop = FALSE]
+  rownames(extra) <- NULL
+  cbind(out[, "id", drop = FALSE], extra, out[, -1, drop = FALSE])
 }
 
 #' Rule-of-thumb description of model fit (Hu & Bentler, 1999). These are
@@ -117,7 +118,10 @@ fit_judgement <- function(cfi, tli, rmsea, srmr, df) {
 build_focal_table <- function(results, manifest, types = c("defined", "indirect"),
                               labels = NULL, method = "holm", family = "all",
                               include_inadmissible = FALSE, alpha = 0.05) {
-  ph_cols <- setdiff(names(manifest), c("id", "name", "syntax", "engine"))
+  ph_cols <- manifest_ph_cols(manifest)
+  # With several templates in one batch, the same label (e.g. "ind") can mean
+  # different effects, so keys are made template-specific.
+  multi_template <- "template_id" %in% names(manifest) && length(unique(manifest$template_id)) > 1
   rows <- list()
   for (id in manifest$id) {
     r <- results[[id]]
@@ -126,9 +130,16 @@ build_focal_table <- function(results, manifest, types = c("defined", "indirect"
     keep <- focal_rows(r$params, types, labels)
     if (!any(keep)) next
     p <- r$params[keep, , drop = FALSE]
-    assignment <- if (length(ph_cols) > 0) unlist(manifest[manifest$id == id, ph_cols, drop = FALSE][1, ]) else NULL
+    assignment <- NULL
+    if (length(ph_cols) > 0) {
+      assignment <- unlist(manifest[manifest$id == id, ph_cols, drop = FALSE][1, ])
+      names(assignment) <- ph_name_of(ph_cols)
+      assignment <- assignment[!is.na(assignment)]
+    }
     d <- effect_descriptions(p, assignment)
-    df <- data.frame(id = id, effect_key = d$key, effect = d$desc,
+    key <- d$key
+    if (multi_template) key <- paste0("[", manifest$template_id[manifest$id == id], "] ", key)
+    df <- data.frame(id = id, effect_key = key, effect = d$desc,
                      est = p$est, se = p$se, ci_lower = p$ci_lower, ci_upper = p$ci_upper,
                      p = p$p, std_est = p$std_est, std_ci_lower = p$std_ci_lower,
                      std_ci_upper = p$std_ci_upper, status = r$status,
@@ -202,7 +213,25 @@ build_param_long <- function(results, manifest) {
   do.call(rbind, rows)
 }
 
-#' Specification-curve style plot of one focal effect across models
+#' Rows of the specification panel: one row per value of every placeholder
+#' that varies across the models of this effect
+spec_panel_rows <- function(d, max_rows = 30) {
+  cols <- manifest_ph_cols(d)
+  cols <- cols[vapply(cols, function(cn) length(unique(stats::na.omit(d[[cn]]))) > 1, logical(1))]
+  rows <- list()
+  for (cn in cols) {
+    for (v in unique(stats::na.omit(d[[cn]]))) {
+      lab <- paste(cn, "=", if (nchar(v) > 24) paste0(substr(v, 1, 22), "…") else v)
+      rows[[length(rows) + 1]] <- list(label = lab, x = which(d[[cn]] == v))
+    }
+  }
+  utils::head(rows, max_rows)
+}
+
+#' Specification curve of one focal effect across models (Simonsohn,
+#' Simmons & Nelson, 2020): estimates sorted by size with their confidence
+#' intervals, and below them the specification (variable choice) of each
+#' model, so that one can see which choices drive the result.
 plot_spec_curve <- function(focal, effect_key, standardized = FALSE, labels = NULL) {
   d <- focal[focal$effect_key == effect_key, , drop = FALSE]
   if (nrow(d) == 0) stop("No estimates for this effect", call. = FALSE)
@@ -216,16 +245,39 @@ plot_spec_curve <- function(focal, effect_key, standardized = FALSE, labels = NU
                            sig = "Significant after correction", ns = "Not significant",
                            title = effect_key)
   col <- ifelse(d$sig_adj, "#1b6ca8", "#9aa5b1")
-  graphics::par(mar = c(4.5, 4.5, 3, 1))
+  spec <- spec_panel_rows(d)
+  left <- max(4.5, if (length(spec) > 0) max(nchar(vapply(spec, `[[`, character(1), "label"))) * 0.42 + 1 else 0)
+  old <- graphics::par(no.readonly = TRUE)
+  on.exit(graphics::par(old), add = TRUE)
+  if (length(spec) > 0) {
+    graphics::layout(matrix(1:2, ncol = 1), heights = c(3, max(1.2, min(3, 0.25 * length(spec) + 0.6))))
+  }
+  n <- length(y)
+  graphics::par(mar = c(if (length(spec) > 0) 1 else 4.5, left, 3, 1))
   rng <- range(c(lo, hi, y, 0), na.rm = TRUE)
-  graphics::plot(seq_along(y), y, ylim = rng, pch = 19, col = col,
-                 xlab = labs$x, ylab = labs$y, main = labs$title, xaxt = if (length(y) <= 30) "n" else "s")
-  if (length(y) <= 30) graphics::axis(1, at = seq_along(y), labels = d$id, las = 2, cex.axis = 0.7)
+  graphics::plot(seq_len(n), y, xlim = c(0.5, n + 0.5), ylim = rng, pch = 19, col = col,
+                 xlab = if (length(spec) > 0) "" else labs$x, ylab = labs$y, main = labs$title,
+                 xaxt = if (length(spec) > 0 || n <= 30) "n" else "s")
+  if (length(spec) == 0 && n <= 30) graphics::axis(1, at = seq_len(n), labels = d$id, las = 2, cex.axis = 0.7)
   ok <- !is.na(lo) & !is.na(hi)
   graphics::segments(which(ok), lo[ok], which(ok), hi[ok], col = col[ok], lwd = 1.5)
   graphics::abline(h = 0, lty = 2, col = "#c0392b")
   graphics::legend("topleft", legend = c(labs$sig, labs$ns), col = c("#1b6ca8", "#9aa5b1"),
                    pch = 19, bty = "n", cex = 0.85)
+  if (length(spec) > 0) {
+    nr <- length(spec)
+    graphics::par(mar = c(4.5, left, 0.5, 1))
+    graphics::plot(NA, xlim = c(0.5, n + 0.5), ylim = c(0.5, nr + 0.5), axes = FALSE,
+                   xlab = labs$x, ylab = "")
+    graphics::abline(h = seq_len(nr), col = "#eef1f4")
+    for (k in seq_len(nr)) {
+      xs <- spec[[k]]$x
+      graphics::points(xs, rep(nr - k + 1, length(xs)), pch = 15, cex = 0.9, col = col[xs])
+    }
+    graphics::axis(2, at = rev(seq_len(nr)), labels = vapply(spec, `[[`, character(1), "label"),
+                   las = 1, cex.axis = 0.7, tick = FALSE)
+    if (n <= 30) graphics::axis(1, at = seq_len(n), labels = d$id, las = 2, cex.axis = 0.7)
+  }
   invisible(d)
 }
 
@@ -233,7 +285,8 @@ plot_spec_curve <- function(focal, effect_key, standardized = FALSE, labels = NU
 plot_fit_distribution <- function(fit_table, labels = NULL) {
   d <- fit_table[fit_table$status %in% c("ok", "warning", "inadmissible") & !fit_table$saturated, , drop = FALSE]
   if (nrow(d) == 0) stop("No non-saturated models with fit indices", call. = FALSE)
-  graphics::par(mfrow = c(2, 2), mar = c(4, 4, 2.5, 1))
+  old <- graphics::par(mfrow = c(2, 2), mar = c(4, 4, 2.5, 1))
+  on.exit(graphics::par(old), add = TRUE)
   # first value = "acceptable" (orange), second = "good" (green) reference line
   spec <- list(cfi = c(.90, .95), tli = c(.90, .95), rmsea = c(.08, .06), srmr = c(.10, .08))
   for (ix in names(spec)) {

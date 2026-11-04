@@ -147,9 +147,19 @@ queue_start_worker <- function(q) {
     for (f in files) source(file.path(core_dir, f), local = FALSE)
     sem_worker_main(core_dir, chunk_file)
   }
-  proc <- callr::r_bg(worker, args = list(q$core_dir, CORE_WORKER_FILES, chunk_file),
-                      supervise = TRUE, package = FALSE)
+  proc <- tryCatch(callr::r_bg(worker, args = list(q$core_dir, CORE_WORKER_FILES, chunk_file),
+                               supervise = TRUE, package = FALSE),
+                   error = function(e) e)
+  if (inherits(proc, "error")) {
+    # e.g. the system refuses to start another process: report the models of
+    # this chunk as failed instead of losing them
+    msg <- paste("Could not start a worker process:", conditionMessage(proc))
+    for (id in ids) q$results[[id]] <- failed_result(id, q$engine, msg)
+    queue_log(q, msg)
+    return(invisible(FALSE))
+  }
   q$running[[length(q$running) + 1]] <- list(proc = proc, ids = ids, started = Sys.time())
+  invisible(TRUE)
 }
 
 kill_worker <- function(w) {
@@ -194,7 +204,7 @@ queue_poll <- function(q) {
   }
   q$running <- keep
   while (!q$cancelled && length(q$running) < q$workers && length(q$pending) > 0) {
-    queue_start_worker(q)
+    if (!queue_start_worker(q)) break
   }
   if (queue_finished(q) && is.null(q$finished_at)) {
     q$finished_at <- Sys.time()

@@ -6,16 +6,22 @@ server_run <- function(ctx) {
 
   engine <- reactive(input$engine %||% "lavaan")
 
-  lavaan_opts <- reactive(list(
-    estimator = input$opt_estimator %||% "ML",
-    missing = input$opt_missing %||% "fiml",
-    bootstrap = min(as.integer(input$opt_bootstrap %||% 0), cfg$limit$max_bootstrap),
-    boot_ci = input$opt_boot_ci %||% "perc",
-    seed = as.integer(input$opt_seed %||% 12345),
-    std_lv = isTRUE(input$opt_std_lv),
-    ordered = input$opt_ordered %||% character(0),
-    level = as.numeric(input$opt_level %||% 0.95)
-  ))
+  # numericInput() returns NA when a field is cleared: fall back to defaults
+  # (an NA seed would make every model fail in set.seed()).
+  lavaan_opts <- reactive({
+    level <- num_input(input$opt_level, 0.95)
+    if (level <= 0 || level >= 1) level <- 0.95
+    list(
+      estimator = input$opt_estimator %||% "ML",
+      missing = input$opt_missing %||% "fiml",
+      bootstrap = max(0L, min(int_input(input$opt_bootstrap, 0L), as.integer(cfg$limit$max_bootstrap))),
+      boot_ci = input$opt_boot_ci %||% "perc",
+      seed = int_input(input$opt_seed, 12345L),
+      std_lv = isTRUE(input$opt_std_lv),
+      ordered = input$opt_ordered %||% character(0),
+      level = level
+    )
+  })
 
   output$option_notes <- renderUI({
     r <- resolve_lavaan_options(lavaan_opts())
@@ -65,8 +71,8 @@ server_run <- function(ctx) {
     manifest <- build_manifest(models)
     data <- rv$data
     notes <- character(0)
-    workers <- max(1, min(as.integer(input$run_workers %||% 1), cfg$limit$max_workers))
-    timeout <- as.numeric(input$run_timeout %||% cfg$limit$default_timeout_s)
+    workers <- max(1L, min(int_input(input$run_workers, 1L), as.integer(cfg$limit$max_workers)))
+    timeout <- num_input(input$run_timeout, cfg$limit$default_timeout_s)
 
     prep <- tryCatch({
       if (eng == "lavaan") {
@@ -83,6 +89,14 @@ server_run <- function(ctx) {
       } else {
         if (!nzchar(rv$mplus_path %||% "")) stop(tr("mplus_not_found"))
         if (!isTRUE(cfg$mplus_automation)) stop(tr("mplus_need_ma"))
+        # Mplus reads numbers only: text variables (IDs, names, ...) are left out
+        md <- mplus_numeric_data(data)
+        if (length(md$dropped) > 0) {
+          msg <- tr("mplus_dropped_vars", paste(md$dropped, collapse = ", "))
+          notes <- c(notes, msg)
+          showNotification(msg, type = "warning", duration = 10)
+        }
+        data <- md$data
         nm <- mplus_name_map(names(data))
         write_mplus_data(data, file.path(run_dir, "data.dat"))
         utils::write.csv(nm[, c("original", "mplus")], file.path(run_dir, "variable_names.csv"),
@@ -120,7 +134,9 @@ server_run <- function(ctx) {
       manifest = manifest, opts = prep$opts, notes = notes, run_dir = run_dir,
       started = Sys.time(), name_map = prep$name_map, data = data,
       data_info = rv$data_info, missing_codes = rv$missing_codes,
-      n_models = nrow(manifest), versions = version_string(eng), app_version = cfg$version
+      n_models = nrow(manifest), versions = version_string(eng), app_version = cfg$version,
+      combination_rule = paste(unique(Filter(nzchar, vapply(models, function(m) m$rule %||% "", character(1)))),
+                               collapse = " | ")
     )
     rv$results <- list()
     rv$progress <- queue_progress(prep$q)
@@ -192,15 +208,36 @@ server_run <- function(ctx) {
 }
 
 #' Manifest (one row per model) from library entries
+#'
+#' Columns: id, name, engine, syntax, template_id (T1, T2, ... one per
+#' distinct template) and one "{{placeholder}}" column per placeholder.
 build_manifest <- function(models) {
   ph <- unique(unlist(lapply(models, function(m) names(m$assignment))))
-  rows <- lapply(models, function(m) {
-    a <- as.list(m$assignment)
-    vals <- vapply(ph, function(p) if (is.null(a[[p]])) NA_character_ else as.character(a[[p]]), character(1))
-    c(list(id = m$id, name = m$name, engine = m$engine, syntax = m$syntax), as.list(vals))
-  })
-  out <- do.call(rbind.data.frame, c(rows, list(stringsAsFactors = FALSE)))
-  names(out) <- c("id", "name", "engine", "syntax", ph)
+  # Templates that differ only in comments or white space count as the same
+  templates <- vapply(models, function(m) gsub("\\s+", "", gsub("[#!][^\n]*", "", m$template %||% "")), character(1))
+  out <- data.frame(
+    id = vapply(models, `[[`, character(1), "id"),
+    name = vapply(models, `[[`, character(1), "name"),
+    engine = vapply(models, `[[`, character(1), "engine"),
+    syntax = vapply(models, `[[`, character(1), "syntax"),
+    template_id = paste0("T", match(templates, unique(templates))),
+    stringsAsFactors = FALSE, check.names = FALSE)
+  for (p in ph) {
+    out[[ph_col(p)]] <- vapply(models, function(m) {
+      v <- m$assignment[p]
+      if (length(v) == 0 || is.na(v)) NA_character_ else as.character(v)
+    }, character(1))
+  }
   rownames(out) <- NULL
   out
+}
+
+#' Integer / numeric value of a numericInput with a default for NA/NULL
+int_input <- function(x, default) {
+  v <- suppressWarnings(as.integer(x %||% default))
+  if (length(v) == 0 || is.na(v)) as.integer(default) else v
+}
+num_input <- function(x, default) {
+  v <- suppressWarnings(as.numeric(x %||% default))
+  if (length(v) == 0 || is.na(v)) default else v
 }

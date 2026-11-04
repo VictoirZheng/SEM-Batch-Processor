@@ -91,3 +91,52 @@ test_that("output text checks detect errors and inadmissible solutions", {
   expect_equal(r$status, "failed")
   expect_true(any(grepl("ERROR", r$errors)))
 })
+
+test_that("reserved Mplus words are never used as variable names", {
+  nm <- mplus_name_map(c("with", "ON", "age", "by"))
+  expect_false(any(toupper(nm$mplus) %in% MPLUS_RESERVED))
+  expect_equal(nm$mplus[3], "age")
+})
+
+test_that("lines with labels are not broken (a label applies to its whole line)", {
+  vars <- sprintf("v%02d", 1:20)
+  long <- paste0("  y ON ", paste(vars, collapse = " "), " (b);")
+  w <- wrap_mplus_lines(paste0("MODEL:\n", long))
+  expect_true(grepl(long, w$text, fixed = TRUE))
+  expect_true(any(grepl("not broken", w$notes)))
+  # only the comment is too long: it moves to its own line
+  w2 <- wrap_mplus_lines(paste0("  y ON x (b); ! ", strrep("comment ", 12)))
+  expect_true(all(nchar(strsplit(w2$text, "\n")[[1]]) <= 90))
+  expect_match(w2$text, "y ON x (b);", fixed = TRUE)
+})
+
+test_that("FATAL ERROR messages are detected; text variables are left out for Mplus", {
+  f <- tempfile(fileext = ".out")
+  writeLines(c("*** FATAL ERROR", "  THERE IS NOT ENOUGH MEMORY SPACE"), f)
+  r <- parse_mplus_output(f)
+  expect_true(any(grepl("FATAL", r$errors)))
+  md <- mplus_numeric_data(data.frame(id = c("a", "b"), x = 1:2, flag = c(TRUE, FALSE)))
+  expect_equal(names(md$data), c("x", "flag"))
+  expect_equal(md$dropped, "id")
+})
+
+test_that("R-square rows are read from Mplus output tables", {
+  mo <- list(parameters = list(
+    unstandardized = data.frame(paramHeader = "Y.ON", param = "X", est = 0.5, se = 0.1, est_se = 5, pval = 0),
+    r2 = data.frame(param = "Y", est = 0.25, se = 0.04, est_se = 6.2, pval = 0)))
+  p <- mplus_params_table(mo, NULL)
+  expect_equal(p$op, c("~", "r2"))
+  expect_equal(p$std_est[2], 0.25)
+})
+
+test_that("Bayesian and multilevel parameter tables are handled", {
+  u <- data.frame(paramHeader = c("Y.ON", "Y.ON"), param = c("X", "X"), est = c(0.5, 0.2),
+                  posterior_sd = c(0.1, 0.05), pval = c(0, 0.01), `lower_2.5ci` = c(0.3, 0.1),
+                  `upper_2.5ci` = c(0.7, 0.3), BetweenWithin = c("Within", "Between"),
+                  check.names = FALSE, stringsAsFactors = FALSE)
+  p <- mplus_param_block(u)
+  expect_equal(p$group, c("Within", "Between"))
+  expect_equal(p$se, c(0.1, 0.05))
+  expect_equal(p$ci_lower, c(0.3, 0.1))
+  expect_true(all(is.na(p$p)))     # one-tailed posterior p-values are not used
+})

@@ -3,7 +3,7 @@ root <- normalizePath(if (file.exists("app.R")) "." else file.path("..", ".."))
 for (f in sort(list.files(file.path(root, "R", "core"), pattern = "\\.R$", full.names = TRUE))) {
   source(f, encoding = "UTF-8", local = globalenv())
 }
-for (f in c("config.R", "i18n.R", "templates.R")) source(file.path(root, "R", "app", f), encoding = "UTF-8", local = globalenv())
+for (f in c("config.R", "i18n.R", "templates.R", "server_run.R")) source(file.path(root, "R", "app", f), encoding = "UTF-8", local = globalenv())
 assign("PROJECT_ROOT", root, envir = globalenv())
 
 make_mediation_data <- function(n = 250, seed = 1) {

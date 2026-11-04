@@ -142,9 +142,11 @@ server_data <- function(ctx) {
       d$variable, d$type, d$n, sprintf("%.1f%%", d$missing_pct),
       fmt_num(d$mean), fmt_num(d$sd), fmt_num(d$min), fmt_num(d$max),
       fmt_num(d$skew, 2), fmt_num(d$kurtosis, 2),
-      flag = ifelse(d$flag_constant, tr("flag_constant"),
-                    ifelse(d$flag_nonnormal, tr("flag_nonnormal"),
-                           ifelse(d$flag_missing, tr("flag_missing"), ""))),
+      flag = vapply(seq_len(nrow(d)), function(i) paste(c(
+        if (d$flag_constant[i]) tr("flag_constant"),
+        if (d$flag_nonnormal[i]) tr("flag_nonnormal"),
+        if (d$flag_missing[i]) tr("flag_missing"),
+        if (d$flag_ordinal[i] && !d$flag_constant[i]) tr("flag_ordinal")), collapse = "; "), character(1)),
       stringsAsFactors = FALSE)
     names(show) <- c(tr("col_variable"), tr("col_type"), "n", tr("col_missing"), tr("col_mean"), "SD",
                      "Min", "Max", tr("col_skew"), tr("col_kurt"), tr("col_flag"))

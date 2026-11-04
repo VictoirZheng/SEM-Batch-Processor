@@ -75,11 +75,50 @@ resolve_lavaan_options <- function(opts, model_vars = NULL) {
   list(args = args, opts = o, notes = notes)
 }
 
+# Functions that may appear in lavaan model syntax: lavaan's modifiers and
+# arithmetic used in defined parameters (:=) and constraints.
+LAVAAN_ALLOWED_CALLS <- c(
+  "c", "start", "label", "equal", "upper", "lower", "rv", "efa",
+  "exp", "log", "log10", "log2", "log1p", "expm1", "sqrt", "abs", "sign",
+  "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh",
+  "asinh", "acosh", "atanh", "pnorm", "qnorm", "dnorm", "plogis", "qlogis",
+  "pt", "qt", "pchisq", "qchisq", "min", "max", "pmin", "pmax", "sum", "prod",
+  "mean", "ifelse", "round", "floor", "ceiling"
+)
+
+#' Reject syntax that could execute arbitrary R code
+#'
+#' lavaan evaluates modifiers (e.g. start(...)) and the right-hand side of
+#' defined parameters and constraints as R expressions. On a shared server
+#' this would let any visitor run code, so only lavaan modifiers and
+#' arithmetic functions are allowed, and characters that have no meaning in
+#' lavaan syntax are rejected.
+#' @return character vector of problems (empty when the syntax is safe)
+lavaan_syntax_safety <- function(syntax) {
+  code <- gsub("[#!][^\n]*", "", syntax)
+  problems <- character(0)
+  calls <- regmatches(code, gregexpr("[A-Za-z.][A-Za-z0-9._]*(?=\\s*\\()", code, perl = TRUE))[[1]]
+  bad <- setdiff(unique(calls), LAVAAN_ALLOWED_CALLS)
+  if (length(bad) > 0) {
+    problems <- c(problems, sprintf("Function(s) not allowed in model syntax: %s",
+                                    paste0(bad, "()", collapse = ", ")))
+  }
+  if (grepl("[`$@{}]|\\[|\\]|::|<-|->|%", code, perl = TRUE)) {
+    problems <- c(problems, "The syntax contains characters that are not part of lavaan syntax (` $ @ [ ] { } :: <- -> %). Write 'a < -1' with spaces.")
+  }
+  problems
+}
+
 #' Syntax and variable check for a lavaan model
 #' @return list(ok, errors, observed, latent)
 check_lavaan_syntax <- function(syntax, data_names = NULL) {
   out <- list(ok = FALSE, errors = character(0), observed = character(0),
               latent = character(0))
+  unsafe <- lavaan_syntax_safety(syntax)
+  if (length(unsafe) > 0) {
+    out$errors <- unsafe
+    return(out)
+  }
   pt <- tryCatch(lavaan::lavaanify(syntax, warn = FALSE),
                  error = function(e) e)
   if (inherits(pt, "error")) {
@@ -127,6 +166,7 @@ fit_lavaan_model <- function(syntax, data, opts = list(), id = "M001", fit_file 
   model_vars <- unique(unlist(strsplit(chk$observed, ":", fixed = TRUE)))
   resolved <- resolve_lavaan_options(opts, model_vars)
   res$notes <- resolved$notes
+  res$lavaan_args <- resolved$args   # exactly what was passed to sem(), for reproduce.R
   o <- resolved$opts
 
   warns <- character(0)
@@ -156,9 +196,13 @@ fit_lavaan_model <- function(syntax, data, opts = list(), id = "M001", fit_file 
   fm <- tryCatch(lavaan::fitMeasures(fit), error = function(e) NULL)
   robust <- o$estimator %in% ROBUST_ESTIMATORS
   res$fit_robust <- robust
-  pick <- function(std, rob = NULL) {
+  # For robust estimators use the robust version, then the scaled version,
+  # then the standard one (availability differs between lavaan versions).
+  pick <- function(std, alt = character(0)) {
     if (is.null(fm)) return(NA_real_)
-    if (robust && !is.null(rob) && rob %in% names(fm) && !is.na(fm[[rob]])) return(unname(fm[[rob]]))
+    if (robust) {
+      for (a in alt) if (a %in% names(fm) && !is.na(fm[[a]])) return(unname(fm[[a]]))
+    }
     if (std %in% names(fm)) unname(fm[[std]]) else NA_real_
   }
   res$fit[] <- c(
@@ -167,11 +211,11 @@ fit_lavaan_model <- function(syntax, data, opts = list(), id = "M001", fit_file 
     chisq = pick("chisq", "chisq.scaled"),
     df = pick("df", "df.scaled"),
     pvalue = pick("pvalue", "pvalue.scaled"),
-    cfi = pick("cfi", "cfi.robust"),
-    tli = pick("tli", "tli.robust"),
-    rmsea = pick("rmsea", "rmsea.robust"),
-    rmsea_lower = pick("rmsea.ci.lower", "rmsea.ci.lower.robust"),
-    rmsea_upper = pick("rmsea.ci.upper", "rmsea.ci.upper.robust"),
+    cfi = pick("cfi", c("cfi.robust", "cfi.scaled")),
+    tli = pick("tli", c("tli.robust", "tli.scaled")),
+    rmsea = pick("rmsea", c("rmsea.robust", "rmsea.scaled")),
+    rmsea_lower = pick("rmsea.ci.lower", c("rmsea.ci.lower.robust", "rmsea.ci.lower.scaled")),
+    rmsea_upper = pick("rmsea.ci.upper", c("rmsea.ci.upper.robust", "rmsea.ci.upper.scaled")),
     srmr = pick("srmr"),
     aic = pick("aic"),
     bic = pick("bic")
@@ -179,11 +223,17 @@ fit_lavaan_model <- function(syntax, data, opts = list(), id = "M001", fit_file 
 
   # --- parameters ---------------------------------------------------------
   if (converged) {
-    res$params <- tryCatch(extract_lavaan_params(fit, o),
-                           error = function(e) {
-                             warns <<- c(warns, paste("Parameter extraction:", conditionMessage(e)))
-                             empty_param_table()
-                           })
+    res$params <- withCallingHandlers(
+      tryCatch(extract_lavaan_params(fit, o),
+               error = function(e) {
+                 warns <<- c(warns, paste("Parameter extraction:", conditionMessage(e)))
+                 empty_param_table()
+               }),
+      warning = function(w) {
+        warns <<- c(warns, clean_lavaan_message(conditionMessage(w)))
+        invokeRestart("muffleWarning")
+      })
+    res$notes <- c(res$notes, attr(res$params, "notes"))
   }
 
   # --- admissibility ------------------------------------------------------
@@ -213,14 +263,17 @@ fit_lavaan_model <- function(syntax, data, opts = list(), id = "M001", fit_file 
       }
     }
   }
-  if (any(grepl("not positive definite|not identified", warns, ignore.case = TRUE))) {
-    inadmissible <- TRUE
-  }
+  if (any(is_inadmissible_warning(warns))) inadmissible <- TRUE
   if (converged) {
     n_dropped <- nrow(data) - res$fit[["n"]]
     if (!is.na(n_dropped) && n_dropped > 0) {
       res$notes <- c(res$notes, sprintf("%d case(s) excluded (missing data handling: %s).",
                                         as.integer(n_dropped), o$missing))
+    }
+    ratio <- res$fit[["n"]] / res$fit[["npar"]]
+    if (!is.na(ratio) && ratio < 5) {
+      res$notes <- c(res$notes, sprintf("Only %.1f cases per free parameter (N = %d, %d parameters): estimates and fit indices may be unstable in samples this small relative to model size (a common rule of thumb asks for at least 5-10 cases per parameter).",
+                                        ratio, as.integer(res$fit[["n"]]), as.integer(res$fit[["npar"]])))
     }
   }
 
@@ -240,6 +293,16 @@ fit_lavaan_model <- function(syntax, data, opts = list(), id = "M001", fit_file 
   res
 }
 
+#' Does a lavaan warning indicate an inadmissible solution?
+#'
+#' Non-positive-definite residual or latent covariance matrices and failed
+#' standard errors do. lavaan's vcov message ("does not appear to be positive
+#' definite ... close to zero") is often harmless (e.g. with equality
+#' constraints) and is therefore only a warning.
+is_inadmissible_warning <- function(w) {
+  grepl("is not positive[- ]definite|could not compute standard errors", w, ignore.case = TRUE)
+}
+
 #' lavaan warnings start with "lavaan WARNING:" and contain hard line breaks
 clean_lavaan_message <- function(x) {
   x <- gsub("lavaan (WARNING|ERROR|NOTE):?\\s*", "", x)
@@ -250,9 +313,20 @@ clean_lavaan_message <- function(x) {
 #' Unified parameter table from a fitted lavaan model
 extract_lavaan_params <- function(fit, o) {
   boot <- o$bootstrap > 0
-  pe <- lavaan::parameterEstimates(fit, ci = TRUE, level = o$level,
-                                   boot.ci.type = if (boot) o$boot_ci else "norm",
-                                   rsquare = TRUE, standardized = FALSE)
+  ci_type <- if (boot) o$boot_ci else "norm"
+  notes <- character(0)
+  get_pe <- function(type) lavaan::parameterEstimates(fit, ci = TRUE, level = o$level,
+                                                      boot.ci.type = type,
+                                                      rsquare = TRUE, standardized = FALSE)
+  pe <- tryCatch(get_pe(ci_type), error = function(e) {
+    # BCa needs more successful bootstrap draws than observations; fall back
+    # to the bias-corrected interval (BCa without the acceleration term).
+    if (!identical(ci_type, "bca")) stop(e)
+    notes <<- c(notes, sprintf("BCa intervals were not available (%s): bias-corrected intervals (bca.simple) are reported instead. Use more bootstrap draws than cases for BCa.",
+                               clean_lavaan_message(conditionMessage(e))))
+    ci_type <<- "bca.simple"
+    get_pe("bca.simple")
+  })
   ss <- tryCatch(lavaan::standardizedSolution(fit, type = "std.all", level = o$level),
                  error = function(e) NULL)
 
@@ -290,6 +364,7 @@ extract_lavaan_params <- function(fit, o) {
   r2 <- out$op == "r2"
   out$std_est[r2] <- out$est[r2]
 
-  attr(out, "ci_method") <- if (boot) paste0("bootstrap-", o$boot_ci) else "wald"
+  attr(out, "ci_method") <- if (boot) paste0("bootstrap-", ci_type) else "wald"
+  attr(out, "notes") <- notes
   out
 }

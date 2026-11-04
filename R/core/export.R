@@ -85,28 +85,39 @@ write_results_xlsx <- function(path, sheets) {
 }
 
 #' Stand-alone R script that refits the lavaan batch
-reproduce_script <- function(opts, data_file = "data.csv") {
-  r <- resolve_lavaan_options(opts)
-  args <- r$args
-  arg_txt <- paste(vapply(names(args), function(n) {
-    v <- args[[n]]
-    val <- if (is.character(v)) {
-      if (length(v) > 1) sprintf("c(%s)", paste(sprintf('"%s"', v), collapse = ", ")) else sprintf('"%s"', v)
-    } else as.character(v)
-    sprintf("%s = %s", n, val)
-  }, character(1)), collapse = ",\n             ")
+#'
+#' The arguments are written per model, exactly as they were passed to
+#' lavaan::sem(): options are adjusted model by model (e.g. WLSMV only for
+#' models that contain ordered variables), so one global call would not
+#' reproduce the results.
+#' @param args_list named list: model id -> argument list used for that model
+reproduce_script <- function(args_list, opts, data_file = "data.csv") {
+  arg_lines <- vapply(names(args_list), function(id) {
+    sprintf("  %s = %s", id, paste(deparse(args_list[[id]], width.cutoff = 500L), collapse = " "))
+  }, character(1))
+  level <- format(opts$level %||% 0.95)
   c("# Reproduce the batch analysis exported by SEM Batch Processor",
     "# Requires: install.packages(\"lavaan\")",
     "library(lavaan)",
     sprintf("dat <- read.csv(\"%s\", fileEncoding = \"UTF-8\")", data_file),
-    "files <- sort(list.files(\"models\", pattern = \"\\\\.lav$\", full.names = TRUE))",
-    "fits <- lapply(files, function(f) {",
-    "  model <- paste(readLines(f, encoding = \"UTF-8\"), collapse = \"\\n\")",
-    sprintf("  set.seed(%s)", opts$seed %||% 12345),
-    sprintf("  sem(model, data = dat,\n             %s)", arg_txt),
+    "",
+    "# Arguments passed to lavaan::sem() for each model (models/<id>.lav)",
+    "args <- list(",
+    paste0(arg_lines, c(rep(",", length(arg_lines) - 1), "")),
+    ")",
+    "",
+    "fits <- lapply(names(args), function(id) {",
+    "  model <- paste(readLines(file.path(\"models\", paste0(id, \".lav\")), encoding = \"UTF-8\"), collapse = \"\\n\")",
+    sprintf("  set.seed(%d)", as.integer(opts$seed %||% 12345)),
+    "  do.call(\"sem\", c(list(model = model, data = dat), args[[id]]))",
     "})",
-    "names(fits) <- tools::file_path_sans_ext(basename(files))",
-    sprintf("lapply(fits, parameterEstimates, boot.ci.type = \"%s\")", opts$boot_ci %||% "perc"))
+    "names(fits) <- names(args)",
+    "",
+    sprintf("ci_type <- \"%s\"", opts$boot_ci %||% "perc"),
+    "estimates <- lapply(fits, function(f) tryCatch(",
+    sprintf("  parameterEstimates(f, boot.ci.type = ci_type, level = %s),", level),
+    sprintf("  error = function(e) parameterEstimates(f, boot.ci.type = \"bca.simple\", level = %s)))", level),
+    "estimates[[1]]")
 }
 
 #' Create the ZIP bundle
@@ -135,7 +146,10 @@ write_results_zip <- function(zip_path, manifest, engine, data, xlsx_path = NULL
       }
     }
     utils::write.csv(data, file.path(tmp, "data.csv"), row.names = FALSE, fileEncoding = "UTF-8")
-    writeLines(reproduce_script(opts), file.path(tmp, "reproduce.R"))
+    fallback <- resolve_lavaan_options(opts)$args
+    args_list <- stats::setNames(lapply(manifest$id, function(id) results[[id]]$lavaan_args %||% fallback),
+                                 manifest$id)
+    writeLines(reproduce_script(args_list, opts), file.path(tmp, "reproduce.R"), useBytes = TRUE)
   } else if (!is.null(run_dir) && dir.exists(run_dir)) {
     files <- list.files(run_dir, pattern = "\\.(inp|out|dat)$", full.names = TRUE, ignore.case = TRUE)
     file.copy(files, file.path(tmp, "models"))

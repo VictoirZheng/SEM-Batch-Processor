@@ -10,18 +10,25 @@ server_model <- function(ctx) {
   engine <- reactive(input$engine %||% "lavaan")
 
   # --- Engine & template ------------------------------------------------------
+  last_engine <- reactiveVal(NULL)
   observeEvent(input$engine, {
     if (identical(input$engine, "mplus") && !mplus_ok()) {
       showNotification(if (cfg$mode == "online") tr("mplus_online_only") else tr("mplus_not_found"),
                        type = "warning", duration = 8)
-      updateRadioButtons(session, "engine", selected = "lavaan")
+      updateRadioButtons(session, "engine", selected = last_engine() %||% "lavaan")
       return()
     }
+    if (identical(input$engine, last_engine())) return()   # bounced back from a refused switch
+    had_engine <- !is.null(last_engine())
+    last_engine(input$engine)
     updateSelectInput(session, "template_select", choices = template_choices(engine(), lang))
-    if (nzchar(trimws(isolate(input$template_text) %||% ""))) {
+    if (had_engine && nzchar(trimws(isolate(input$template_text) %||% ""))) {
       showNotification(tr("engine_switched_reload"), type = "message", duration = 6)
     }
   })
+
+  # Variable names as Mplus will see them (numeric variables only)
+  mplus_names <- function() mplus_name_map(names(mplus_numeric_data(rv$data)$data))
 
   output$engine_note <- renderUI({
     if (mplus_ok()) return(NULL)
@@ -66,19 +73,24 @@ server_model <- function(ctx) {
         sel_id <- ph_input_id("ph_", nm)
         link_id <- ph_input_id("link_", nm)
         is_set <- identical(type, "set")
+        # Keep the previous selection *in its order* (pairing of linked
+        # placeholders and the marker item of a set depend on it): selectize
+        # shows selected items in the order of `choices`.
+        prev <- intersect(isolate(input[[sel_id]]) %||% character(0), vars)
         div(class = "ph-row",
             div(class = "ph-head",
                 tags$code(sprintf("{{%s}}", nm)),
                 tags$span(class = paste("label ph-type", paste0("ph-", type)), tr(paste0("type_", type)))),
             fluidRow(
               column(if (is_set) 12 else 8,
-                     selectizeInput(sel_id, NULL, choices = vars, multiple = TRUE,
-                                    selected = intersect(isolate(input[[sel_id]]), vars),
+                     selectizeInput(sel_id, NULL, choices = c(prev, setdiff(vars, prev)), multiple = TRUE,
+                                    selected = prev,
                                     options = list(plugins = list("remove_button"),
                                                    placeholder = if (is_set) tr("ph_pick_set") else tr("ph_pick")))),
               if (!is_set) column(4, selectInput(link_id, NULL, link_choices,
                                                  selected = isolate(input[[link_id]]) %||% links[[nm]]))
-            ))
+            ),
+            if (is_set) div(class = "small text-muted ph-set-hint", tr("ph_set_hint")))
       })
     )
   })
@@ -118,12 +130,36 @@ server_model <- function(ctx) {
     n <- count_combinations(st$choices, st$links)
     full <- prod(vapply(st$choices, length, integer(1)))
     lim <- cfg$limit$max_models - length(rv$library)
+    # Show how linked placeholders are paired, so that a wrong order of
+    # selection is visible before any model is generated
+    units <- combination_units(names(st$choices), st$links)
+    pairs <- lapply(Filter(function(u) length(u) > 1, units), function(u) {
+      k <- length(st$choices[[u[1]]])
+      shown <- seq_len(min(k, 6))
+      tags$li(tags$code(paste0("{{", u, "}}", collapse = " + ")), ": ",
+              paste(vapply(shown, function(i) paste(vapply(u, function(ph) st$choices[[ph]][i], character(1)), collapse = " \u2194 "),
+                           character(1)), collapse = "; "),
+              if (k > 6) " \u2026")
+    })
     div(class = paste("callout", if (n > lim) "callout-danger" else "callout-success"),
         HTML(tr("combo_count", format(n, big.mark = ","))),
         if (full > n) div(class = "small", tr("combo_linked_saving", format(full, big.mark = ","))),
+        if (length(pairs) > 0) div(class = "small combo-pairs", tr("combo_pairs"), tags$ul(pairs)),
         if (isTRUE(input$exclude_duplicates)) div(class = "small", tr("combo_dup_note")),
         if (n > lim) div(tr("combo_over_limit", lim)))
   })
+
+  # Description of the combination rule (written to the methods sheet)
+  combination_rule <- function(st) {
+    units <- combination_units(names(st$choices), st$links)
+    linked <- vapply(Filter(function(u) length(u) > 1, units), function(u) paste0("{{", u, "}}", collapse = "+"), character(1))
+    parts <- c(
+      if (length(linked) > 0) paste("linked (paired by position):", paste(linked, collapse = ", ")),
+      if (length(st$sets) > 0) paste("item sets:", paste0("{{", st$sets, "}}", collapse = ", ")),
+      if (isTRUE(input$exclude_duplicates)) "combinations using a variable twice skipped"
+    )
+    if (length(parts) == 0) "all combinations (crossed)" else paste(c("crossed", parts), collapse = "; ")
+  }
 
   # Combination table (data.frame of assignments)
   build_combo_table <- function() {
@@ -180,7 +216,7 @@ server_model <- function(ctx) {
                                  paste(chk$errors, collapse = "; "))))
       }
     } else {
-      b <- build_mplus_input(first, mplus_name_map(names(rv$data)), "check")
+      b <- build_mplus_input(first, mplus_names(), "check")
       cls <- if (length(b$notes) == 0) "callout-success" else "callout-warning"
       msgs <- c(msgs, list(div(class = paste("callout", cls),
                                if (length(b$notes) == 0) tr("check_mplus_ok") else tagList(
@@ -198,8 +234,8 @@ server_model <- function(ctx) {
       a <- if (ncol(cmb) > 0) cmb[1, , drop = FALSE] else list()
       syn <- make_syntax(txt, a)
       if (engine() == "mplus") {
-        req(rv$data)
-        b <- build_mplus_input(syn, mplus_name_map(names(rv$data)),
+        if (is.null(rv$data)) stop(tr("ph_need_data"))
+        b <- build_mplus_input(syn, mplus_names(),
                                paste("M001", assignment_label(a, ph_state()$sets)))
         list(text = b$text, notes = b$notes)
       } else list(text = syn, notes = character(0))
@@ -230,6 +266,7 @@ server_model <- function(ctx) {
     if (inherits(res, "error")) return(showNotification(conditionMessage(res), type = "error", duration = 10))
 
     n <- length(res$syn)
+    rule <- if (nrow(st$table) > 0) combination_rule(st) else ""
     ids <- make_model_ids(n, start = rv$next_model)
     prefix <- trimws(input$model_prefix %||% "")
     new_models <- lapply(seq_len(n), function(i) {
@@ -238,7 +275,7 @@ server_model <- function(ctx) {
       list(id = ids[i],
            name = paste0(if (nzchar(prefix)) paste0(prefix, " ") else "", if (nzchar(lbl)) lbl else tr("model_single")),
            engine = engine(), syntax = res$syn[[i]], template = txt, assignment = a,
-           created = Sys.time())
+           rule = rule, created = Sys.time())
     })
     names(new_models) <- ids
     rv$library <- c(rv$library, new_models)

@@ -211,15 +211,16 @@ join_set <- function(vars, engine = "lavaan") {
 
 #' Suggest link groups for dyadic / paired placeholders
 #'
-#' Placeholders whose names differ only by a member suffix (_1/_2, _H/_W,
-#' _A/_P, _M/_F, _self/_partner, ...) are proposed as one link group so that
-#' their variables are paired by position instead of fully crossed.
+#' Placeholders whose names differ only by a member suffix after a separator
+#' (_1/_2, _H/_W, _A/_P, _M/_F, _self/_partner, ...) are proposed as one link
+#' group so that their variables are paired by position instead of crossed.
+#' A bare digit ("M1", "M2") is NOT treated as a member suffix: in templates
+#' such as parallel mediation it numbers different constructs.
 #' @return named character: placeholder -> suggested group label ("" = none)
 suggest_links <- function(ph_names, types = NULL) {
   out <- stats::setNames(rep("", length(ph_names)), ph_names)
   if (length(ph_names) < 2) return(out)
-  # letter suffixes need a separator ("X_H"); digits may follow directly ("X1")
-  suffix <- "(?i)([_.](1|2|3|h|w|a|p|m|f|self|partner|actor|husband|wife|mother|father|child|parent|t1|t2|t3)|(?<=[a-z])[123])$"
+  suffix <- "(?i)[_.](1|2|3|h|w|a|p|m|f|self|partner|actor|husband|wife|mother|father|child|parent|t1|t2|t3)$"
   base <- sub(suffix, "", ph_names, perl = TRUE)
   has_suffix <- base != ph_names & nzchar(base)
   if (!is.null(types)) has_suffix <- has_suffix & types[ph_names] != "set"
@@ -230,3 +231,17 @@ suggest_links <- function(ph_names, types = NULL) {
   }
   out
 }
+
+# ---------------------------------------------------------------------------
+# Placeholder columns in manifests and result tables are named "{{name}}" so
+# that they can never collide with result columns such as "se" or "p"
+# (e.g. a placeholder {{se}} for self-esteem).
+# ---------------------------------------------------------------------------
+
+ph_col <- function(name) paste0("{{", name, "}}")
+
+#' Placeholder columns of a manifest / result table
+manifest_ph_cols <- function(df) grep("^\\{\\{.+\\}\\}$", names(df), value = TRUE)
+
+#' Placeholder name from a "{{name}}" column name
+ph_name_of <- function(col) sub("^\\{\\{(.+)\\}\\}$", "\\1", col)

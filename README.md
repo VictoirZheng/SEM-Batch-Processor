@@ -90,6 +90,8 @@ docs/REVIEW.md        对 2.1.x 的审查记录及处理方式
 Rscript tests/run_tests.R
 ```
 
+每次推送和 PR 都会由 GitHub Actions（`.github/workflows/tests.yml`）自动运行全部测试。其中包括用 MplusAutomation 自带的真实 Mplus 输出检验结果解析：本地没有安装 MplusAutomation 时，这部分测试会自动跳过。
+
 ## 统计方法说明
 
 见程序内的“帮助与方法说明”页。要点：

@@ -2,12 +2,19 @@
 
 SUPPORTED_DATA_EXT <- c("csv", "tsv", "txt", "xlsx", "xls", "sav", "dta")
 
-#' Detect the text encoding of a file: UTF-8 (with/without BOM) or GB18030.
-#' Excel on Chinese Windows saves CSV as GBK/GB18030 by default.
-detect_text_encoding <- function(path) {
-  raw <- readBin(path, "raw", n = min(file.info(path)$size, 2e6))
-  if (length(raw) >= 3 && identical(raw[1:3], as.raw(c(0xef, 0xbb, 0xbf)))) {
-    return("UTF-8-BOM")
+#' Detect the text encoding of a file: UTF-8 (with/without BOM), UTF-16
+#' (with BOM) or GB18030. Excel on Chinese Windows saves CSV as GBK/GB18030.
+detect_text_encoding <- function(path, max_bytes = 2e6) {
+  size <- file.info(path)$size
+  raw <- readBin(path, "raw", n = min(size, max_bytes))
+  if (length(raw) >= 3 && identical(raw[1:3], as.raw(c(0xef, 0xbb, 0xbf)))) return("UTF-8-BOM")
+  if (length(raw) >= 2 && identical(raw[1:2], as.raw(c(0xff, 0xfe)))) return("UTF-16LE")
+  if (length(raw) >= 2 && identical(raw[1:2], as.raw(c(0xfe, 0xff)))) return("UTF-16BE")
+  # When only part of the file was read, cut at the last line break so that a
+  # multi-byte character split by the cut does not look like invalid UTF-8.
+  if (size > length(raw)) {
+    nl <- which(raw == as.raw(0x0a))
+    if (length(nl) > 0) raw <- raw[seq_len(max(nl))]
   }
   txt <- rawToChar(raw[raw != as.raw(0)])
   if (validUTF8(txt)) "UTF-8" else "GB18030"
@@ -42,12 +49,16 @@ read_data_file <- function(path, name = basename(path), encoding = "auto", sheet
     csv = , tsv = , txt = {
       enc <- if (identical(encoding, "auto")) detect_text_encoding(path) else encoding
       used_encoding <- enc
-      first <- readLines(path, n = 1, warn = FALSE)
-      has <- function(ch) grepl(ch, first, fixed = TRUE, useBytes = TRUE)
+      con <- file(path, encoding = enc)
+      first <- tryCatch(readLines(con, n = 1, warn = FALSE), error = function(e) "")
+      close(con)
+      has <- function(ch) any(grepl(ch, first, fixed = TRUE, useBytes = TRUE))
       sep <- if (ext == "tsv" || (ext == "txt" && has("\t"))) "\t" else
         if (ext == "csv" && !has(",") && has(";")) ";" else ","
+      # fill = TRUE (as in read.csv): rows with trailing empty cells omitted by
+      # some exporters are padded with NA instead of failing
       utils::read.table(path, header = TRUE, sep = sep, quote = "\"",
-                        fileEncoding = enc, check.names = FALSE,
+                        fileEncoding = enc, check.names = FALSE, fill = TRUE,
                         stringsAsFactors = FALSE, na.strings = c("", "NA", "N/A", "."),
                         comment.char = "", strip.white = TRUE)
     },
@@ -154,7 +165,10 @@ kurtosis_g2 <- function(x) {
 #' Descriptive statistics for every variable
 #'
 #' Flags: |skewness| > 2 or excess kurtosis > 7 (West, Finch & Curran, 1995)
-#' indicate substantial non-normality; > 20% missing is also flagged.
+#' indicate substantial non-normality; > 20% missing is also flagged; integer
+#' variables with 2-4 categories are flagged as ordinal-like because treating
+#' them as continuous can bias estimates (Rhemtulla, Brosseau-Liard & Savalei,
+#' 2012) -- consider declaring them ordered when they are outcomes/indicators.
 describe_data <- function(data) {
   rows <- lapply(names(data), function(v) {
     x <- data[[v]]
@@ -178,6 +192,11 @@ describe_data <- function(data) {
   out$flag_nonnormal <- !is.na(out$skew) & (abs(out$skew) > 2 | out$kurtosis > 7)
   out$flag_missing <- out$missing_pct > 20
   out$flag_constant <- out$n_unique <= 1
+  is_int <- vapply(names(data), function(v) {
+    x <- data[[v]]
+    is.numeric(x) && all(is.na(x) | abs(x - round(x)) < 1e-8)
+  }, logical(1))
+  out$flag_ordinal <- unname(is_int) & out$n_unique >= 2 & out$n_unique <= 4
   out
 }
 

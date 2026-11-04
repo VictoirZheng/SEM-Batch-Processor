@@ -1,0 +1,34 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # In CI the tests on real Mplus output must run, not be skipped
+      SEMBP_REQUIRE_MPLUS_TESTS: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install R packages
+        shell: Rscript {0}
+        run: |
+          pkgs <- c("shiny", "shinydashboard", "DT", "lavaan", "callr", "processx",
+                    "openxlsx", "yaml", "zip", "readxl", "haven", "testthat",
+                    "MplusAutomation")
+          install.packages(pkgs)
+          missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
+          if (length(missing) > 0) stop("Not installed: ", paste(missing, collapse = ", "))
+          for (p in pkgs) cat(p, as.character(packageVersion(p)), "\n")
+
+      - name: Run tests
+        run: Rscript tests/run_tests.R

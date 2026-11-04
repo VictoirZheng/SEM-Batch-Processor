@@ -34,15 +34,22 @@ detect_mplus <- function(configured = NULL) {
 # Variable names
 # ---------------------------------------------------------------------------
 
+# Words with a meaning in Mplus syntax; a variable with one of these names
+# would be misread (e.g. "y ON with;").
+MPLUS_RESERVED <- c("ALL", "AND", "ARE", "BY", "EQ", "GE", "GT", "IND", "IS", "LE",
+                    "LT", "MOD", "NE", "NOT", "ON", "OR", "PON", "PWITH", "THEN",
+                    "TO", "VIA", "WITH", "XWITH", "IF", "ELSE", "MISSING", "NEW")
+
 #' Map data variable names to valid Mplus names
 #'
 #' Mplus names: <= 8 characters, start with a letter, letters/digits/_,
-#' case-insensitive. Valid names are kept; others get a short unique name.
+#' case-insensitive, not a reserved word. Valid names are kept; others get a
+#' short unique name.
 #' @return data.frame(original, mplus, changed)
 mplus_name_map <- function(names_) {
-  valid <- grepl("^[A-Za-z][A-Za-z0-9_]{0,7}$", names_)
+  valid <- grepl("^[A-Za-z][A-Za-z0-9_]{0,7}$", names_) & !toupper(names_) %in% MPLUS_RESERVED
   out <- character(length(names_))
-  used <- character(0)
+  used <- MPLUS_RESERVED
   # keep valid names first (respecting case-insensitive uniqueness)
   for (i in which(valid)) {
     if (!toupper(names_[i]) %in% used) {
@@ -92,6 +99,13 @@ unmap_mplus_names <- function(x, name_map) {
 # ---------------------------------------------------------------------------
 # Data file
 # ---------------------------------------------------------------------------
+
+#' Numeric part of the data for Mplus (Mplus reads numbers only)
+#' @return list(data, dropped) where dropped are the non-numeric variables
+mplus_numeric_data <- function(data) {
+  keep <- vapply(data, function(x) is.numeric(x) || is.logical(x), logical(1))
+  list(data = data[, keep, drop = FALSE], dropped = names(data)[!keep])
+}
 
 #' Write a free-format Mplus data file; missing values are written as "."
 write_mplus_data <- function(data, path) {
@@ -160,11 +174,16 @@ wrap_words <- function(words, first_prefix = "  ", next_prefix = "    ", width =
 }
 
 #' Break lines longer than Mplus' 90-character limit
+#'
+#' Lines containing parentheses are not broken: in Mplus a label such as
+#' "y ON x1 x2 (b);" applies to every parameter on its line, so moving
+#' variables to another line would change the model.
 #' @return list(text, notes)
 wrap_mplus_lines <- function(text) {
   lines <- strsplit(text, "\n", fixed = TRUE)[[1]]
   out <- character(0)
   too_long <- 0L
+  labelled <- 0L
   for (ln in lines) {
     if (nchar(ln) <= MPLUS_MAX_LINE) {
       out <- c(out, ln)
@@ -173,6 +192,18 @@ wrap_mplus_lines <- function(text) {
     pos <- regexpr("!", ln, fixed = TRUE)
     code <- if (pos > 0) substr(ln, 1, pos - 1) else ln
     comment <- if (pos > 0) substr(ln, pos, nchar(ln)) else ""
+    if (grepl("(", code, fixed = TRUE)) {
+      if (nchar(code) <= MPLUS_MAX_LINE) {
+        # only the comment makes the line too long: move it to its own lines
+        ind <- sub("^(\\s*).*$", "\\1", code)
+        cwords <- strsplit(sub("^!\\s*", "", comment), "\\s+")[[1]]
+        out <- c(out, sub("\\s+$", "", code), wrap_words(cwords, paste0(ind, "! "), paste0(ind, "! ")))
+      } else {
+        labelled <- labelled + 1L
+        out <- c(out, ln)
+      }
+      next
+    }
     indent <- sub("^(\\s*).*$", "\\1", code)
     words <- strsplit(trimws(code), "\\s+")[[1]]
     words <- words[nzchar(words)]
@@ -184,7 +215,12 @@ wrap_mplus_lines <- function(text) {
     }
     out <- c(out, wrapped)
   }
-  notes <- if (too_long > 0) sprintf("%d line(s) still exceed %d characters (a single token is too long).", too_long, MPLUS_MAX_LINE) else character(0)
+  notes <- character(0)
+  if (too_long > 0) notes <- c(notes, sprintf("%d line(s) still exceed %d characters (a single token is too long).", too_long, MPLUS_MAX_LINE))
+  if (labelled > 0) {
+    notes <- c(notes, sprintf("%d line(s) with labels or parentheses exceed %d characters and were not broken automatically (breaking them would change which parameters a label applies to). Split them in the template, keeping each label on the line of the parameters it belongs to.",
+                              labelled, MPLUS_MAX_LINE))
+  }
   list(text = paste(out, collapse = "\n"), notes = notes)
 }
 
@@ -340,9 +376,10 @@ parse_mplus_output <- function(out_file, id = "M001", name_map = NULL) {
   up <- toupper(text)
 
   normal <- any(grepl("THE MODEL ESTIMATION TERMINATED NORMALLY", up, fixed = TRUE))
-  err_lines <- grep("^\\s*\\*\\*\\* ERROR", text, value = TRUE)
+  err_regex <- "^\\s*\\*\\*\\* (FATAL )?ERROR"
+  err_lines <- grep(err_regex, text, value = TRUE)
   if (length(err_lines) > 0) {
-    idx <- grep("^\\s*\\*\\*\\* ERROR", text)
+    idx <- grep(err_regex, text)
     msgs <- vapply(idx, function(i) paste(trimws(text[i:min(length(text), i + 3)]), collapse = " "), character(1))
     res$errors <- unique(msgs)
   }
@@ -414,6 +451,16 @@ mplus_params_table <- function(mo, name_map = NULL) {
   if (!is.null(ind) && !is.null(ind$unstandardized)) {
     rows[[length(rows) + 1]] <- mplus_indirect_block(ind)
   }
+  if (!is.null(P$r2) && NROW(P$r2) > 0 && "param" %in% names(P$r2)) {
+    r2 <- as.data.frame(P$r2, stringsAsFactors = FALSE)
+    num <- function(col) if (col %in% names(r2)) suppressWarnings(as.numeric(r2[[col]])) else rep(NA_real_, nrow(r2))
+    rows[[length(rows) + 1]] <- data.frame(
+      group = if ("Group" %in% names(r2)) as.character(r2$Group) else "",
+      lhs = as.character(r2$param), op = "r2", rhs = as.character(r2$param), label = "",
+      est = num("est"), se = num("se"), z = num("est_se"), p = num("pval"),
+      ci_lower = NA_real_, ci_upper = NA_real_, std_est = num("est"), std_se = NA_real_,
+      std_p = NA_real_, std_ci_lower = NA_real_, std_ci_upper = NA_real_, stringsAsFactors = FALSE)
+  }
   if (length(rows) == 0) return(empty_param_table())
   out <- do.call(rbind, rows)
   out$lhs <- unmap_mplus_names(out$lhs, name_map)
@@ -462,18 +509,34 @@ mplus_param_block <- function(u, ci = NULL, s = NULL, sci = NULL) {
   other <- is.na(op)
   op[other] <- hdr[other]
 
-  grp <- if ("Group" %in% names(u)) as.character(u$Group) else rep("", length(hdr))
+  # Group, latent class and level (Within/Between) distinguish otherwise
+  # identical parameters in multiple-group, mixture and multilevel models
+  kc <- mplus_key_cols(u)
+  grp <- if (length(kc) == 0) rep("", length(hdr)) else
+    do.call(paste, c(lapply(kc, function(k) as.character(u[[k]])), sep = "/"))
   label <- ifelse(op == ":=", prm, "")
-  est <- num(u, "est", seq_along(hdr))
-  se <- num(u, "se", seq_along(hdr))
-  z <- num(u, "est_se", seq_along(hdr))
-  p <- num(u, "pval", seq_along(hdr))
+  rr <- seq_along(hdr)
+  est <- num(u, "est", rr)
+  # Bayesian output has a posterior SD and credibility interval instead
+  bayes <- !"se" %in% names(u) && "posterior_sd" %in% names(u)
+  se <- if (bayes) num(u, "posterior_sd", rr) else num(u, "se", rr)
+  z <- num(u, "est_se", rr)
+  p <- num(u, "pval", rr)
+  # Mplus' Bayesian "P-Value" is a one-tailed posterior probability, not a
+  # two-tailed test, so it must not enter the multiple-comparison correction
+  if (bayes) { z[] <- NA; p[] <- NA }
   fixed <- !is.na(se) & se == 0
   z[fixed] <- NA; p[fixed] <- NA
+  ci_lower <- num(ci, "low2.5", m_ci)
+  ci_upper <- num(ci, "up2.5", m_ci)
+  if (bayes && all(is.na(ci_lower)) && "lower_2.5ci" %in% names(u)) {
+    ci_lower <- num(u, "lower_2.5ci", rr)
+    ci_upper <- num(u, "upper_2.5ci", rr)
+  }
   data.frame(
     group = grp, lhs = lhs, op = op, rhs = rhs, label = label,
     est = est, se = se, z = z, p = p,
-    ci_lower = num(ci, "low2.5", m_ci), ci_upper = num(ci, "up2.5", m_ci),
+    ci_lower = ci_lower, ci_upper = ci_upper,
     std_est = num(s, "est", m_s), std_se = num(s, "se", m_s), std_p = num(s, "pval", m_s),
     std_ci_lower = num(sci, "low2.5", m_sci), std_ci_upper = num(sci, "up2.5", m_sci),
     stringsAsFactors = FALSE

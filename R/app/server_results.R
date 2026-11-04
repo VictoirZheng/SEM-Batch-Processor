@@ -12,7 +12,7 @@ server_results <- function(ctx) {
     req(rv$batch)
     rv$batch$manifest
   })
-  ph_cols <- reactive(setdiff(names(manifest()), c("id", "name", "engine", "syntax")))
+  ph_cols <- reactive(manifest_ph_cols(manifest()))
 
   fit_tbl <- reactive({
     req(length(rv$results) > 0)
@@ -177,8 +177,9 @@ server_results <- function(ctx) {
   export_info <- reactive({
     b <- rv$batch
     req(b)
+    links <- b$combination_rule %||% ""
     c(b, list(focal_types = input$focal_types, p_adjust = input$p_adjust, family = input$p_family,
-              combination_rule = if (length(ph_cols()) > 0) paste(ph_cols(), collapse = ", ") else ""))
+              combination_rule = if (nzchar(links)) links else paste(ph_cols(), collapse = ", ")))
   })
 
   output$methods_table <- renderTable({
@@ -227,8 +228,6 @@ server_results <- function(ctx) {
     content = function(file) utils::write.csv(focal_tbl(), file, row.names = FALSE, fileEncoding = "UTF-8")
   )
 
-  ctx$focal_tbl <- focal_tbl
-  ctx$fit_tbl <- fit_tbl
   invisible(NULL)
 }
 

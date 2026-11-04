@@ -51,7 +51,9 @@ app_ui <- function(request) {
   )
 }
 
-box <- function(..., title = NULL, status = "primary", width = 12, collapsible = FALSE,
+# Named ui_box (not "box") so that graphics::box() is not masked in the
+# global environment.
+ui_box <- function(..., title = NULL, status = "primary", width = 12, collapsible = FALSE,
                 collapsed = FALSE) {
   shinydashboard::box(..., title = title, status = status, solidHeader = FALSE,
                       width = width, collapsible = collapsible, collapsed = collapsed)
@@ -63,7 +65,7 @@ ui_home <- function(tr, cfg) {
     shinydashboard::valueBoxOutput("vb_models", width = 3),
     shinydashboard::valueBoxOutput("vb_results", width = 3),
     shinydashboard::valueBoxOutput("vb_engine", width = 3),
-    box(title = tr("home_welcome_title"), width = 7,
+    ui_box(title = tr("home_welcome_title"), width = 7,
         p(tr("home_intro")),
         tags$ol(class = "steps",
                 tags$li(HTML(tr("home_step1"))),
@@ -72,7 +74,7 @@ ui_home <- function(tr, cfg) {
                 tags$li(HTML(tr("home_step4")))),
         actionButton("go_data", tr("home_start"), icon = icon("arrow-right"), class = "btn-primary")
     ),
-    box(title = tr("home_mode_title"), width = 5, status = if (cfg$mode == "online") "info" else "success",
+    ui_box(title = tr("home_mode_title"), width = 5, status = if (cfg$mode == "online") "info" else "success",
         p(HTML(if (cfg$mode == "online") tr("home_mode_online") else tr("home_mode_local"))),
         uiOutput("home_engines"))
   )
@@ -81,7 +83,7 @@ ui_home <- function(tr, cfg) {
 ui_data <- function(tr, cfg) {
   fluidRow(
     column(4,
-      box(title = tr("data_upload_title"), width = 12,
+      ui_box(title = tr("data_upload_title"), width = 12,
           fileInput("data_file", tr("data_file"), accept = paste0(".", SUPPORTED_DATA_EXT),
                     buttonLabel = tr("browse"), placeholder = tr("data_no_file")),
           fluidRow(
@@ -91,12 +93,12 @@ ui_data <- function(tr, cfg) {
             column(5, numericInput("data_sheet", tr("data_sheet"), 1, min = 1, step = 1))
           ),
           helpText(tr("data_formats_help", cfg$limit$max_upload_mb))),
-      box(title = tr("data_missing_title"), width = 12,
+      ui_box(title = tr("data_missing_title"), width = 12,
           textInput("missing_codes", tr("data_missing_codes"), placeholder = "-999, -99"),
           actionButton("apply_missing", tr("apply"), icon = icon("check")),
           helpText(tr("data_missing_help")),
           uiOutput("missing_report")),
-      box(title = tr("derive_title"), width = 12, collapsible = TRUE, collapsed = TRUE,
+      ui_box(title = tr("derive_title"), width = 12, collapsible = TRUE, collapsed = TRUE,
           radioButtons("derive_type", NULL,
                        stats::setNames(c("center", "product", "mean"),
                                        c(tr("derive_center"), tr("derive_product"), tr("derive_mean")))),
@@ -127,7 +129,7 @@ ui_model <- function(tr, cfg) {
   engine_choices <- stats::setNames(c("lavaan", "mplus"), c("R / lavaan", "Mplus"))
   fluidRow(
     column(7,
-      box(title = tr("model_template_title"), width = 12,
+      ui_box(title = tr("model_template_title"), width = 12,
           fluidRow(
             column(4, radioButtons("engine", tr("engine"), engine_choices, selected = "lavaan", inline = TRUE),
                    uiOutput("engine_note")),
@@ -140,7 +142,7 @@ ui_model <- function(tr, cfg) {
           uiOutput("template_check"))
     ),
     column(5,
-      box(title = tr("model_assign_title"), width = 12, status = "warning",
+      ui_box(title = tr("model_assign_title"), width = 12, status = "warning",
           uiOutput("placeholder_ui"),
           checkboxInput("exclude_duplicates", tr("model_exclude_dup"), TRUE),
           textInput("model_prefix", tr("model_name_prefix"), ""),
@@ -150,7 +152,7 @@ ui_model <- function(tr, cfg) {
               actionButton("add_models", tr("model_add"), icon = icon("plus"), class = "btn-success")))
     ),
     column(12,
-      box(title = tr("library_title"), width = 12, status = "success",
+      ui_box(title = tr("library_title"), width = 12, status = "success",
           uiOutput("library_info"),
           DT::DTOutput("library_table"),
           div(class = "btn-row",
@@ -164,7 +166,7 @@ ui_run <- function(tr, cfg) {
   fluidRow(
     column(5,
       conditionalPanel("input.engine == 'lavaan'",
-        box(title = tr("run_lavaan_title"), width = 12,
+        ui_box(title = tr("run_lavaan_title"), width = 12,
             fluidRow(
               column(6, selectInput("opt_estimator", tr("opt_estimator"),
                                     stats::setNames(LAVAAN_ESTIMATORS,
@@ -190,14 +192,14 @@ ui_run <- function(tr, cfg) {
             uiOutput("option_notes"),
             helpText(HTML(tr("run_lavaan_help"))))),
       conditionalPanel("input.engine == 'mplus'",
-        box(title = tr("run_mplus_title"), width = 12,
+        ui_box(title = tr("run_mplus_title"), width = 12,
             p(HTML(tr("run_mplus_help"))),
             if (cfg$mode == "local") textInput("mplus_out_dir", tr("run_mplus_dir"),
                                                file.path(getwd(), "mplus_runs")),
             uiOutput("mplus_status")))
     ),
     column(7,
-      box(title = tr("run_title"), width = 12, status = "success",
+      ui_box(title = tr("run_title"), width = 12, status = "success",
           fluidRow(
             column(4, numericInput("run_workers", tr("run_workers"),
                                    min(2, cfg$limit$max_workers), min = 1, max = cfg$limit$max_workers)),
@@ -269,7 +271,7 @@ ui_results <- function(tr) {
 ui_plots <- function(tr) {
   fluidRow(
     column(3,
-      box(title = tr("plot_options"), width = 12,
+      ui_box(title = tr("plot_options"), width = 12,
           selectInput("plot_type", tr("plot_type"),
                       stats::setNames(c("spec", "fitdist", "path"),
                                       c(tr("plot_spec"), tr("plot_fitdist"), tr("plot_path")))),
@@ -284,17 +286,17 @@ ui_plots <- function(tr) {
                    column(6, numericInput("plot_h", tr("plot_height"), 6, min = 3, max = 30))),
           selectInput("plot_format", tr("plot_format"), c("PNG" = "png", "PDF" = "pdf", "SVG" = "svg")),
           downloadButton("dl_plot", tr("plot_download"), class = "btn-block"))),
-    column(9, box(title = tr("plot_preview"), width = 12, plotOutput("main_plot", height = "560px")))
+    column(9, ui_box(title = tr("plot_preview"), width = 12, plotOutput("main_plot", height = "560px")))
   )
 }
 
 ui_settings <- function(tr, cfg, lang) {
   fluidRow(
-    box(title = tr("set_language"), width = 6,
+    ui_box(title = tr("set_language"), width = 6,
         selectInput("set_lang", NULL, c("中文" = "zh", "English" = "en"), selected = lang),
         actionButton("apply_lang", tr("apply"), icon = icon("language")),
         helpText(tr("set_language_help"))),
-    box(title = tr("set_engines"), width = 6,
+    ui_box(title = tr("set_engines"), width = 6,
         uiOutput("settings_engines"),
         if (cfg$mode == "local") tagList(
           textInput("set_mplus_path", tr("set_mplus_path"), cfg$mplus_path),
