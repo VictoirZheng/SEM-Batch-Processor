@@ -1,0 +1,20 @@
+! Simple mediation: X -> M -> Y
+! TITLE, DATA, NAMES and MISSING are generated automatically.
+
+VARIABLE:
+  USEVARIABLES = {{X:predictor}} {{M:mediator}} {{Y:outcome}};
+
+ANALYSIS:
+  ESTIMATOR = ML;
+  BOOTSTRAP = 2000;
+
+MODEL:
+  {{M}} ON {{X}} (a);
+  {{Y}} ON {{M}} (b)
+           {{X}} (cp);
+
+MODEL INDIRECT:
+  {{Y}} IND {{X}};
+
+OUTPUT:
+  STANDARDIZED CINTERVAL(BOOTSTRAP);

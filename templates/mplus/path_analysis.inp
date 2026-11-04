@@ -1,0 +1,13 @@
+! Path analysis with covariates: X -> Y controlling for a set of covariates
+
+VARIABLE:
+  USEVARIABLES = {{Y:outcome}} {{X:predictor}} {{COV:set}};
+
+ANALYSIS:
+  ESTIMATOR = MLR;
+
+MODEL:
+  {{Y}} ON {{X}} {{COV}};
+
+OUTPUT:
+  STANDARDIZED CINTERVAL;

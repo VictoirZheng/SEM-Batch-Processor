@@ -1,143 +1,32 @@
-﻿# Default Configuration for SEM Batch Processor
-# This file contains default settings that can be overridden by user preferences
+# SEM Batch Processor configuration
+#
+# Settings here can be overridden by config/local.yaml (not tracked by git)
+# or by environment variables:
+#   SEMBP_MODE        online | local | auto
+#   SEMBP_LANG        zh | en
+#   SEMBP_MPLUS_PATH  path to the Mplus executable
 
 app:
-  name: "SEM Batch Processor"
-  version: "2.1.1-EN"
-  language: "en-US"
-  
-ui:
-  theme: "flatly"
-  max_file_size_mb: 100
-  items_per_page: 20
-  enable_tooltips: true
-  enable_animations: true
-  color_scheme:
-    primary: "#337ab7"
-    success: "#5cb85c"
-    warning: "#f0ad4e"
-    danger: "#d9534f"
-    info: "#5bc0de"
+  # auto: "online" when running on shinyapps.io / Posit Connect, otherwise "local"
+  mode: auto
+  # default interface language: zh or en (users can switch on the Settings page)
+  language: en
 
-engines:
-  default: "auto"  # auto, mplus, r
-  auto_detect: true
-  mplus:
-    enabled: true
-    executable_path: null  # null means auto-detect
-    timeout_seconds: 3600
-    max_iterations: 1000
-    convergence_criterion: 0.00001
-  r:
-    enabled: true
-    default_estimator: "ML"  # ML, MLR, WLSMV, etc.
-    bootstrap_samples: 1000
-    parallel_processing: true
-    required_packages:
-      - lavaan
-      - semPlot
-      - psych
-      - MASS
+# Limits protect a shared server. "local" applies on your own computer.
+limits:
+  online:
+    max_models: 300
+    max_bootstrap: 5000
+    max_workers: 2
+    max_upload_mb: 30
+    default_timeout_s: 600
+  local:
+    max_models: 5000
+    max_bootstrap: 20000
+    max_workers: 16
+    max_upload_mb: 500
+    default_timeout_s: 3600
 
-data:
-  supported_formats:
-    - csv
-    - sav
-    - xlsx
-    - dta
-  encoding: "UTF-8"
-  missing_values:
-    - -999
-    - -99
-    - NA
-  max_missing_percent: 50
-  auto_detect_types: true
-
-templates:
-  library_path: "templates"
-  auto_save: true
-  validation:
-    strict_mode: false
-    check_syntax: true
-    check_variables: true
-  default_templates:
-    - name: "Basic SEM Model"
-      file: "basic_sem.txt"
-    - name: "APIM Model"
-      file: "apim.txt"
-    - name: "Mediation Model"
-      file: "mediation.txt"
-    - name: "Moderation Model"
-      file: "moderation.txt"
-
-processing:
-  max_parallel_jobs: 4
-  checkpoint_interval: 10
-  auto_save_interval: 300  # seconds
-  retry_failed: true
-  max_retries: 3
-  memory_limit_mb: 4096
-  temp_cleanup: true
-
-results:
-  auto_extract: true
-  extract_fit_indices: true
-  extract_parameters: true
-  extract_modifications: false
-  significance_level: 0.05
-  confidence_level: 0.95
-  standardized_estimates: true
-  
-visualization:
-  default_format: "png"
-  dpi: 300
-  width: 10
-  height: 8
-  font_size: 12
-  show_estimates: true
-  show_significance: true
-  color_significant: "#d9534f"
-  color_nonsignificant: "#999999"
-
-reporting:
-  default_format: "html"  # html, word, pdf
-  include_plots: true
-  include_tables: true
-  include_interpretation: true
-  language: "en-US"
-  template: "default"
-
-logging:
-  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
-  console: true
-  file: true
-  file_path: "logs"
-  max_file_size_mb: 10
-  max_files: 5
-  format: "[{timestamp}] [{level}] {message}"
-
-security:
-  enable_input_validation: true
-  sanitize_file_names: true
-  restrict_file_access: true
-  max_upload_size_mb: 100
-  allowed_extensions:
-    - csv
-    - sav
-    - xlsx
-    - dta
-    - txt
-
-performance:
-  cache_enabled: true
-  cache_size_mb: 500
-  preload_templates: true
-  lazy_load_results: true
-  optimize_memory: true
-
-session:
-  auto_save: true
-  save_interval: 300  # seconds
-  max_history: 10
-  enable_recovery: true
-  session_timeout: 3600  # seconds
+mplus:
+  # null = search the PATH and the usual installation folders
+  executable_path: null

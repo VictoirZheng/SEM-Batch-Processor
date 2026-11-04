@@ -1,0 +1,28 @@
+! Parallel mediation: X -> M1 -> Y and X -> M2 -> Y
+
+VARIABLE:
+  USEVARIABLES = {{X:predictor}} {{M1:mediator}} {{M2:mediator}} {{Y:outcome}};
+
+ANALYSIS:
+  ESTIMATOR = ML;
+  BOOTSTRAP = 2000;
+
+MODEL:
+  {{M1}} ON {{X}} (a1);
+  {{M2}} ON {{X}} (a2);
+  {{Y}} ON {{M1}} (b1)
+           {{M2}} (b2)
+           {{X}} (cp);
+  {{M1}} WITH {{M2}};
+
+MODEL CONSTRAINT:
+  NEW(ind1 ind2 inddiff);
+  ind1 = a1*b1;
+  ind2 = a2*b2;
+  inddiff = a1*b1 - a2*b2;
+
+MODEL INDIRECT:
+  {{Y}} IND {{X}};
+
+OUTPUT:
+  STANDARDIZED CINTERVAL(BOOTSTRAP);

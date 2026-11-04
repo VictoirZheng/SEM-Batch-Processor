@@ -1,0 +1,28 @@
+! Actor-Partner Interdependence Mediation Model (APIMeM), husbands (H) and
+! wives (W). Placeholders ending in _H/_W are linked automatically.
+
+VARIABLE:
+  USEVARIABLES = {{X_H:predictor}} {{X_W:predictor}} {{M_H:mediator}} {{M_W:mediator}}
+    {{Y_H:outcome}} {{Y_W:outcome}};
+
+ANALYSIS:
+  ESTIMATOR = ML;
+  BOOTSTRAP = 2000;
+
+MODEL:
+  {{M_H}} ON {{X_H}} {{X_W}};
+  {{M_W}} ON {{X_H}} {{X_W}};
+  {{Y_H}} ON {{M_H}} {{M_W}} {{X_H}} {{X_W}};
+  {{Y_W}} ON {{M_H}} {{M_W}} {{X_H}} {{X_W}};
+  {{X_H}} WITH {{X_W}};
+  {{M_H}} WITH {{M_W}};
+  {{Y_H}} WITH {{Y_W}};
+
+MODEL INDIRECT:
+  {{Y_H}} IND {{X_H}};
+  {{Y_W}} IND {{X_H}};
+  {{Y_H}} IND {{X_W}};
+  {{Y_W}} IND {{X_W}};
+
+OUTPUT:
+  STANDARDIZED CINTERVAL(BCBOOTSTRAP);

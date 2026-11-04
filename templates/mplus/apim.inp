@@ -1,0 +1,25 @@
+! Actor-Partner Interdependence Model (distinguishable dyads)
+! Placeholders ending in _1/_2 are linked: person 1 and person 2 variables
+! are paired by position.
+
+VARIABLE:
+  USEVARIABLES = {{X_1:predictor}} {{X_2:predictor}} {{Y_1:outcome}} {{Y_2:outcome}};
+
+ANALYSIS:
+  ESTIMATOR = ML;
+
+MODEL:
+  {{Y_1}} ON {{X_1}} (a1)
+             {{X_2}} (p21);
+  {{Y_2}} ON {{X_2}} (a2)
+             {{X_1}} (p12);
+  {{X_1}} WITH {{X_2}};
+  {{Y_1}} WITH {{Y_2}};
+
+MODEL CONSTRAINT:
+  NEW(adiff pdiff);
+  adiff = a1 - a2;
+  pdiff = p21 - p12;
+
+OUTPUT:
+  STANDARDIZED CINTERVAL;

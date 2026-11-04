@@ -1,0 +1,18 @@
+# Actor-Partner Interdependence Mediation Model (APIMeM), e.g. husbands (H)
+# and wives (W). Placeholders ending in _H/_W are linked automatically, so
+# the husband and wife version of each construct are always paired.
+
+{{M_H:mediator}} ~ aHH*{{X_H:predictor}} + aHW*{{X_W:predictor}}
+{{M_W:mediator}} ~ aWW*{{X_W}} + aWH*{{X_H}}
+{{Y_H:outcome}} ~ bHH*{{M_H}} + bHW*{{M_W}} + cHH*{{X_H}} + cHW*{{X_W}}
+{{Y_W:outcome}} ~ bWW*{{M_W}} + bWH*{{M_H}} + cWW*{{X_W}} + cWH*{{X_H}}
+
+{{X_H}} ~~ {{X_W}}
+{{M_H}} ~~ {{M_W}}
+{{Y_H}} ~~ {{Y_W}}
+
+# Total indirect effects (through both partners' mediators)
+ind_XH_YH := aHH*bHH + aWH*bHW
+ind_XW_YH := aHW*bHH + aWW*bHW
+ind_XH_YW := aHH*bWH + aWH*bWW
+ind_XW_YW := aHW*bWH + aWW*bWW

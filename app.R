@@ -1,85 +1,32 @@
-# SEM Batch Processor - Main Application Entry Point
-# Version 2.0.0
-# Enhanced R Shiny application for batch SEM analysis
+# SEM Batch Processor - Shiny entry point
+#
+# Run locally:  shiny::runApp()        (from the project folder)
+# Deploy:       rsconnect::deployApp() (online mode is detected automatically)
 
-# Load required packages
-required_packages <- c(
-  "shiny",
-  "shinydashboard",
-  "shinyjs",
-  "shinyWidgets",
-  "DT",
-  "plotly",
-  "ggplot2",
-  "dplyr",
-  "tidyr",
-  "stringr",
-  "lavaan",
-  "psych",
-  "progress",
-  "crayon"
-)
-
-# Optional packages (will use if available)
-optional_packages <- c(
-  "yaml",
-  "MplusAutomation",
-  "semPlot",
-  "foreign",
-  "readxl",
-  "openxlsx",
-  "future",
-  "promises",
-  "shinyAce"  # For advanced code editor
-)
-
-# Check and install missing required packages
-missing_packages <- required_packages[!sapply(required_packages, function(pkg) {
-  requireNamespace(pkg, quietly = TRUE)
-})]
-
-if (length(missing_packages) > 0) {
-  message(sprintf("Installing %d missing required packages...", length(missing_packages)))
-  message("Missing packages: ", paste(missing_packages, collapse = ", "))
-  install.packages(missing_packages, dependencies = TRUE)
+if (.Platform$OS.type != "windows" && !isTRUE(l10n_info()$`UTF-8`)) {
+  try(Sys.setlocale("LC_CTYPE", "C.UTF-8"), silent = TRUE)
 }
 
-# Load required packages
-suppressPackageStartupMessages({
-  for (pkg in required_packages) {
-    if (requireNamespace(pkg, quietly = TRUE)) {
-      library(pkg, character.only = TRUE, quietly = TRUE)
-    } else {
-      warning(sprintf("Failed to load required package: %s", pkg))
-    }
+local({
+  required <- c("shiny", "shinydashboard", "DT", "lavaan", "callr", "processx", "openxlsx", "yaml", "zip")
+  missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
+  if (length(missing) > 0) {
+    stop("Missing R packages: ", paste(missing, collapse = ", "),
+         "\nInstall them with:\ninstall.packages(c(", paste0('"', missing, '"', collapse = ", "), "))",
+         call. = FALSE)
   }
 })
 
-# Try to load optional packages
-for (pkg in optional_packages) {
-  if (requireNamespace(pkg, quietly = TRUE)) {
-    suppressPackageStartupMessages({
-      library(pkg, character.only = TRUE, quietly = TRUE)
-    })
-  }
+library(shiny)
+
+for (f in c(sort(list.files("R/core", pattern = "\\.R$", full.names = TRUE)),
+            sort(list.files("R/app", pattern = "\\.R$", full.names = TRUE)))) {
+  source(f, encoding = "UTF-8", local = globalenv())
 }
 
-# Source module loader
-source("R/modules/module_loader.R")
+# Defined in the global environment because the UI and server functions
+# (sourced above into the global environment) refer to it.
+assign("APP_CONFIG", load_app_config(), envir = globalenv())
+options(shiny.maxRequestSize = APP_CONFIG$limit$max_upload_mb * 1024^2)
 
-# Initialize application
-initialize_app(env = Sys.getenv("APP_ENV", "development"))
-
-# Source UI and Server components
-if (file.exists("R/ui/ui_main.R")) {
-  source("R/ui/ui_main.R")
-  log_info("UI loaded successfully")
-}
-
-if (file.exists("R/server/server_main.R")) {
-  source("R/server/server_main.R")
-  log_info("Server loaded successfully")
-}
-
-# Run the application
-shinyApp(ui = ui, server = server)
+shinyApp(ui = app_ui, server = app_server)

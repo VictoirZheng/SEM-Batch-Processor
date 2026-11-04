@@ -1,0 +1,12 @@
+# Latent-variable mediation (full SEM): FX -> FM -> FY
+# Each factor is measured by a set of items.
+
+FX =~ {{X_items:set}}
+FM =~ {{M_items:set}}
+FY =~ {{Y_items:set}}
+
+FM ~ a*FX
+FY ~ b*FM + cp*FX
+
+ind   := a*b
+total := cp + a*b

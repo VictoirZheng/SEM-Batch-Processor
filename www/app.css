@@ -1,0 +1,55 @@
+/* SEM Batch Processor styles (on top of shinydashboard / AdminLTE 2) */
+.content-wrapper { background-color: #f4f6f9; }
+.box { border-radius: 4px; }
+.box-header .box-title { font-weight: 600; }
+
+/* header badge for online / local mode */
+.mode-badge { padding: 15px 12px 0 0; }
+.mode-badge .label { font-size: 12px; font-weight: 500; }
+
+/* sidebar status block */
+.sidebar-status { margin: 18px 15px; padding: 10px 12px; border-radius: 4px;
+  background: rgba(255,255,255,0.06); color: #b8c7ce; font-size: 12px; }
+.sidebar-status div { display: flex; justify-content: space-between; padding: 2px 0; }
+.sidebar-status .v { color: #fff; font-weight: 600; }
+
+/* template editor */
+#template_text { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 13px; line-height: 1.45; background: #fbfcfd; }
+pre.syntax { max-height: 60vh; overflow: auto; font-size: 12.5px; background: #fbfcfd; }
+.raw-output pre { max-height: 480px; overflow: auto; font-size: 12px; }
+#run_log { max-height: 320px; overflow-y: auto; font-size: 12px; }
+
+/* placeholder assignment rows */
+.ph-help { margin-bottom: 10px; }
+.ph-row { border-left: 3px solid #3c8dbc; padding: 6px 10px 0 10px; margin-bottom: 10px; background: #fafbfc; }
+.ph-head { margin-bottom: 4px; }
+.ph-head code { font-size: 13px; color: #8e44ad; background: transparent; padding: 0; }
+.ph-type { margin-left: 6px; font-weight: 500; }
+.ph-outcome { background-color: #c0392b; }
+.ph-predictor { background-color: #27ae60; }
+.ph-mediator { background-color: #d68910; }
+.ph-moderator { background-color: #7d3c98; }
+.ph-covariate { background-color: #5d6d7e; }
+.ph-latent, .ph-observed { background-color: #2e86c1; }
+.ph-set { background-color: #17a589; }
+.ph-other { background-color: #95a5a6; }
+.ph-row .form-group { margin-bottom: 6px; }
+
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.btn-row .btn { margin: 0; }
+.steps li { margin-bottom: 6px; }
+.callout { margin-bottom: 10px; padding: 10px 14px; }
+.callout ul { margin: 4px 0 0 0; padding-left: 18px; }
+
+/* progress */
+.progress-lg { height: 26px; margin-bottom: 8px; }
+.progress-lg .progress-bar { line-height: 26px; font-size: 13px; }
+.run-counters .label { display: inline-block; margin: 0 4px 4px 0; font-size: 12px; font-weight: 500; padding: 4px 7px; }
+.lbl-inadm { background-color: #ca6f1e; }
+
+.engine-table th { width: 40%; font-weight: 600; }
+table.dataTable td { vertical-align: top; }
+.ph-set-hint { margin: -2px 0 6px 0; }
+.combo-pairs ul { margin-top: 2px; }
+.combo-pairs code { color: #8e44ad; background: transparent; padding: 0; }

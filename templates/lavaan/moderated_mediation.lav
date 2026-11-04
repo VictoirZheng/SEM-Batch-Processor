@@ -1,0 +1,9 @@
+# First-stage moderated mediation (Hayes model 7): W moderates X -> M.
+# The index of moderated mediation (a3*b; Hayes, 2015) tests whether the
+# indirect effect depends on W. Centre X and W on the Data page first.
+
+{{M:mediator}} ~ a1*{{X:predictor}} + a2*{{W:moderator}} + a3*{{X}}:{{W}}
+{{Y:outcome}} ~ b*{{M}} + cp*{{X}}
+
+imm := a3*b          # index of moderated mediation
+ind_at_mean_w := a1*b  # indirect effect at W = 0 (the mean, if W is centred)

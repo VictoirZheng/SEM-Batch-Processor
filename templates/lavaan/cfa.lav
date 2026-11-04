@@ -1,0 +1,6 @@
+# Confirmatory factor analysis with three correlated factors.
+# Placeholders annotated with ":set" take a whole set of items at once.
+
+F1 =~ {{F1_items:set}}
+F2 =~ {{F2_items:set}}
+F3 =~ {{F3_items:set}}

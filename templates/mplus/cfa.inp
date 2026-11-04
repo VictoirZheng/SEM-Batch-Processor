@@ -1,0 +1,16 @@
+! Confirmatory factor analysis with three correlated factors.
+! Placeholders annotated with ":set" take a whole set of items at once.
+
+VARIABLE:
+  USEVARIABLES = {{F1_items:set}} {{F2_items:set}} {{F3_items:set}};
+
+ANALYSIS:
+  ESTIMATOR = MLR;
+
+MODEL:
+  F1 BY {{F1_items}};
+  F2 BY {{F2_items}};
+  F3 BY {{F3_items}};
+
+OUTPUT:
+  STANDARDIZED CINTERVAL MODINDICES(10);

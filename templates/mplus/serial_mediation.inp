@@ -1,0 +1,21 @@
+! Serial (chain) mediation: X -> M1 -> M2 -> Y
+
+VARIABLE:
+  USEVARIABLES = {{X:predictor}} {{M1:mediator}} {{M2:mediator}} {{Y:outcome}};
+
+ANALYSIS:
+  ESTIMATOR = ML;
+  BOOTSTRAP = 2000;
+
+MODEL:
+  {{M1}} ON {{X}};
+  {{M2}} ON {{X}} {{M1}};
+  {{Y}} ON {{M1}} {{M2}} {{X}};
+
+MODEL INDIRECT:
+  {{Y}} IND {{M1}} {{X}};
+  {{Y}} IND {{M2}} {{X}};
+  {{Y}} IND {{M2}} {{M1}} {{X}};
+
+OUTPUT:
+  STANDARDIZED CINTERVAL(BOOTSTRAP);

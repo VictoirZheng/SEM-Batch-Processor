@@ -1,0 +1,22 @@
+! Latent-variable mediation (full SEM): FX -> FM -> FY
+
+VARIABLE:
+  USEVARIABLES = {{X_items:set}} {{M_items:set}} {{Y_items:set}};
+
+ANALYSIS:
+  ESTIMATOR = ML;
+  BOOTSTRAP = 2000;
+
+MODEL:
+  FX BY {{X_items}};
+  FM BY {{M_items}};
+  FY BY {{Y_items}};
+  FM ON FX (a);
+  FY ON FM (b)
+        FX (cp);
+
+MODEL INDIRECT:
+  FY IND FX;
+
+OUTPUT:
+  STANDARDIZED CINTERVAL(BOOTSTRAP);
