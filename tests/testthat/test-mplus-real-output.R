@@ -52,7 +52,13 @@ test_that("latent indirect effects (UG ex5.12) are parsed", {
   r <- parse_mplus_output(f, "M001", mplus_name_map(sprintf("y%d", 1:12)))
   expect_equal(r$status, "ok")
   expect_true(any(r$params$op == "=~" & r$params$lhs == "F1" & r$params$rhs == "y1"))
-  expect_true("F1 -> F3 -> F4" %in% r$params$label[r$params$op == "ind"])
+  # With a single path (f4 IND f3 f1) Mplus prints one "Indirect" line and no
+  # "Specific indirect" block; it is read as the (total) indirect effect.
+  ind <- r$params[r$params$op == "total_ind", ]
+  expect_equal(nrow(ind), 1)
+  expect_equal(c(ind$rhs, ind$lhs, ind$label), c("F1", "F4", "F1 -> F4"))
+  expect_equal(ind$est, 0.266)
+  expect_true(focal_rows(r$params, "indirect")[r$params$op == "total_ind"])
 })
 
 test_that("other example outputs parse without errors", {
