@@ -22,3 +22,6 @@ Thumbs.db
 
 # Mplus
 Mplus*.log
+
+# Simulated data (regenerate with dev/make_mock_data.R)
+dev/mock_data/
